@@ -1,0 +1,30 @@
+# Ambiente Python
+.env
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Banco de dados
+*.db
+*.sqlite3
+
+# Pastas de dados (não subir arquivos pessoais)
+inbox/*
+processed/*
+outputs/*
+
+# Manter estrutura das pastas
+!inbox/.gitkeep
+!processed/.gitkeep
+!outputs/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
