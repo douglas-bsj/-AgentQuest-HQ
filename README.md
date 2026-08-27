@@ -6,15 +6,52 @@
 
 ## 📋 O que é isso?
 
-O **AgentQuest HQ** é um web app local onde agentes de IA analisam mensagens do **WhatsApp**, **Telegram** e **E-mails**, extraem automaticamente pendências e tarefas, e apresentam tudo num painel para **aprovação humana** antes de qualquer ação.
-
-Nenhuma ação é executada sem sua aprovação. Os agentes só leem, resumem e sugerem.
+O **AgentQuest HQ** é um web app local onde um time de **10 agentes de IA especializados** analisam mensagens do **WhatsApp**, **Telegram** e **E-mails**, extraem automaticamente pendências por área (Financeiro, Comercial, Jurídico, RH, Atendimento) e apresentam tudo num painel para **aprovação humana** antes de qualquer ação.
 
 ---
 
-## 🎨 Design
+## 🤖 Time de Agentes
 
-Interface com cenário isométrico pixel art de escritório moderno com painéis de UI limpos sobrepostos.
+### Orquestrador
+| Agente | Tecnologia | Função |
+|---|---|---|
+| **Hermes Agent** | Nous Research (MIT) | Coordena todo o fluxo, memória persistente, spawna sub-agentes |
+
+### Pipeline Base
+| Agente | Função |
+|---|---|
+| **Leitor** | Lê e transcreve conversas e documentos |
+| **Extrator** | Identifica pendências e classifica por área |
+| **Planejador** | Sugere próximos passos |
+| **Revisor** | Valida e melhora os resultados |
+
+### Agentes Especializados
+| Agente | Área | O que detecta |
+|---|---|---|
+| **💰 Financeiro** | Finanças | Cobranças, pagamentos, notas fiscais, orçamentos |
+| **📈 Comercial** | Vendas | Leads, follow-ups, propostas, oportunidades |
+| **⚖️ Jurídico (LGPD)** | Jurídico | Contratos, riscos legais, violações de LGPD |
+| **👥 RH** | Recursos Humanos | Férias, admissões, avaliações, benefícios |
+| **📅 Atendente** | Secretaria | Agendamentos, triagem, redirecionamento |
+
+---
+
+## 🔄 Fluxo
+
+`
+[WhatsApp / Telegram / E-mail / Arquivo]
+              ↓
+       [Hermes Agent]       ← Orquestrador
+              ↓
+   [Leitor] → [Extrator]    ← Pipeline base
+              ↓
+  [Agente Especializado]    ← Financeiro / Comercial /
+                               Jurídico / RH / Atendente
+              ↓
+   [Planejador] → [Revisor] ← Valida e melhora
+              ↓
+  [Painel de Aprovação]     ← Você aprova ou rejeita
+`
 
 ---
 
@@ -22,38 +59,12 @@ Interface com cenário isométrico pixel art de escritório moderno com painéis
 
 | Camada | Tecnologia |
 |---|---|
+| Orquestrador | Hermes Agent (Nous Research, MIT) |
 | Backend | Python 3.11+ + FastAPI |
 | Banco de Dados | SQLite |
 | IA | Google Gemini API (gratuito) |
-| Frontend | HTML + CSS + JavaScript (vanilla) |
-| Leitura de arquivos | PyPDF2, python-docx, openpyxl |
-| Monitor de pasta | watchdog |
-| Comunicação real-time | SSE (Server-Sent Events) |
-
----
-
-## 🤖 Agentes
-
-| Agente | Função |
-|---|---|
-| **Orquestrador** | Coordena o fluxo entre os demais agentes |
-| **Leitor** | Lê e interpreta documentos e conversas |
-| **Extrator** | Extrai pendências, tarefas e responsáveis |
-| **Planejador** | Sugere próximos passos e prazos |
-| **Revisor** | Valida e melhora os resultados antes de exibir |
-
----
-
-## 📥 Fontes de Dados Suportadas (v1)
-
-| Fonte | Formato |
-|---|---|
-| WhatsApp | Exportação de conversa .txt |
-| Telegram | Exportação de conversa .json |
-| E-mail | Arquivos .eml ou integração IMAP |
-| Documentos | .pdf, .docx, .xlsx, .txt, .md |
-
-**Fluxo:** inbox/ → processamento → processed/ + outputs/
+| Frontend | HTML + CSS + JavaScript |
+| Real-time | SSE (Server-Sent Events) |
 
 ---
 
@@ -83,43 +94,26 @@ Acesse: http://localhost:8000
 
 ---
 
-## 📁 Estrutura do Projeto
+## 📥 Fontes Suportadas (v1)
 
-`
-agentquest-hq/
-├── backend/
-│   ├── agents/          # Definição dos 5 agentes
-│   │   ├── orchestrator.py
-│   │   ├── reader.py
-│   │   ├── extractor.py
-│   │   ├── planner.py
-│   │   └── reviewer.py
-│   ├── tools/           # Ferramentas dos agentes
-│   │   ├── file_reader.py
-│   │   ├── whatsapp_parser.py
-│   │   ├── telegram_parser.py
-│   │   └── email_parser.py
-│   ├── database.py      # SQLite — models e queries
-│   ├── watcher.py       # Monitor da pasta inbox/
-│   └── main.py          # FastAPI app + rotas
-├── frontend/
-│   ├── index.html       # Página principal
-│   ├── style.css        # Estilos
-│   └── app.js           # Lógica do frontend
-├── docs/mockups/        # Imagens de design
-├── inbox/               # Coloque arquivos aqui
-├── processed/           # Arquivos já processados
-├── outputs/             # Resultados dos agentes
-├── .env.example
-├── requirements.txt
-├── run.py
-└── README.md
-`
+| Fonte | Formato |
+|---|---|
+| WhatsApp | .txt (exportação de conversa) |
+| Telegram | .json (exportação de conversa) |
+| E-mail | .eml ou IMAP |
+| Documentos | .pdf, .docx, .xlsx, .txt, .md |
 
 ---
 
 ## 🔒 Segurança
 
-- Os agentes NÃO enviam mensagens ou alteram dados externos
-- Toda sugestão passa pela aprovação manual do usuário
-- A API key fica apenas no .env local (nunca sobe para o GitHub)
+- Agentes NÃO realizam ações externas sem aprovação
+- Dados processados localmente
+- Agente Jurídico monitora violações de LGPD automaticamente
+- API Key salva apenas no .env local (nunca vai ao GitHub)
+
+---
+
+## 📄 Documentação completa
+
+Veja [docs/PLANEJAMENTO.md](docs/PLANEJAMENTO.md) para detalhes de cada agente e arquitetura completa.
