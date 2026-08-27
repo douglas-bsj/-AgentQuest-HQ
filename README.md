@@ -21,7 +21,7 @@ O **AgentQuest HQ** é um web app local onde um time de **10 agentes de IA espec
 | Agente | Função |
 |---|---|
 | **Leitor** | Lê e transcreve conversas e documentos |
-| **Extrator** | Identifica pendências e classifica por área |
+| **Administrativo** | Identifica pendências e classifica por área |
 | **Planejador** | Sugere próximos passos |
 | **Revisor** | Valida e melhora os resultados |
 
@@ -43,7 +43,7 @@ O **AgentQuest HQ** é um web app local onde um time de **10 agentes de IA espec
               ↓
        [Hermes Agent]       ← Orquestrador
               ↓
-   [Leitor] → [Extrator]    ← Pipeline base
+   [Leitor] → [Administrativo]    ← Pipeline base
               ↓
   [Agente Especializado]    ← Financeiro / Comercial /
                                Jurídico / RH / Atendente
@@ -117,3 +117,4 @@ Acesse: http://localhost:8000
 ## 📄 Documentação completa
 
 Veja [docs/PLANEJAMENTO.md](docs/PLANEJAMENTO.md) para detalhes de cada agente e arquitetura completa.
+

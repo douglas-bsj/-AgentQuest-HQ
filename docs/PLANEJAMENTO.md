@@ -18,11 +18,11 @@ Sistema local de agentes de IA para extração de pendências de conversas (What
 | Agente | Função |
 |---|---|
 | **Leitor** | Lê e transcreve o conteúdo dos arquivos e conversas |
-| **Extrator** | Identifica pendências, responsáveis, prazos e classifica o tipo |
+| **Administrativo** | Identifica pendências, responsáveis, prazos e classifica o tipo |
 | **Planejador** | Sugere próximos passos e ações para cada pendência |
 | **Revisor** | Valida e melhora os resultados (usa Fase Reflexiva do Hermes) |
 
-### Agentes Especializados (roteados pelo Extrator)
+### Agentes Especializados (roteados pelo Administrativo)
 | Agente | Área | Responsabilidades |
 |---|---|---|
 | **Agente Financeiro** | Finanças | Analisa cobranças, pagamentos, notas fiscais, orçamentos, fluxo de caixa, inadimplência |
@@ -42,7 +42,7 @@ Sistema local de agentes de IA para extração de pendências de conversas (What
                 ↓
           [Leitor]       ← Lê e transcreve
                 ↓
-          [Extrator]     ← Identifica tipo da pendência
+          [Administrativo]     ← Identifica tipo da pendência
                 ↓
     ┌───────────┴────────────┐
     │ Classifica e roteia    │
@@ -130,7 +130,7 @@ agentquest-hq/
 │   ├── agents/
 │   │   ├── hermes_bridge.py      # Interface com o Hermes Agent
 │   │   ├── reader.py             # Agente Leitor
-│   │   ├── extractor.py          # Agente Extrator + roteador
+│   │   ├── administrative.py          # Agente Administrativo + roteador
 │   │   ├── planner.py            # Agente Planejador
 │   │   ├── reviewer.py           # Agente Revisor
 │   │   ├── financial.py          # Agente Financeiro
@@ -179,3 +179,4 @@ agentquest-hq/
 - Google Gemini Docs: https://ai.google.dev/docs
 - FastAPI: https://fastapi.tiangolo.com
 - Inspiração multi-agente: https://github.com/douglas-bsj/multiagentes-em-debate
+
