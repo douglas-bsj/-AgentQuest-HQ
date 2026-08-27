@@ -31,7 +31,6 @@ O **AgentQuest HQ** é um web app local onde um time de **10 agentes de IA espec
 | **💰 Financeiro** | Finanças | Cobranças, pagamentos, notas fiscais, orçamentos |
 | **📈 Comercial** | Vendas | Leads, follow-ups, propostas, oportunidades |
 | **⚖️ Jurídico (LGPD)** | Jurídico | Contratos, riscos legais, violações de LGPD |
-| **👥 RH** | Recursos Humanos | Férias, admissões, avaliações, benefícios |
 | **📅 Atendente** | Secretaria | Agendamentos, triagem, redirecionamento |
 
 ---
@@ -117,4 +116,5 @@ Acesse: http://localhost:8000
 ## 📄 Documentação completa
 
 Veja [docs/PLANEJAMENTO.md](docs/PLANEJAMENTO.md) para detalhes de cada agente e arquitetura completa.
+
 
