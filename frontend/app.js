@@ -1,3 +1,50 @@
+// ══════════════════════════════════════════════════════════════════
+// ── API CONNECTION MODULE ────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+const API_BASE = 'http://127.0.0.1:8000';
+let isOnline = false;  // true = API mode, false = demo mode
+
+const API = {
+  async check() {
+    try {
+      const r = await fetch(API_BASE + '/api/stats', { signal: AbortSignal.timeout(2000) });
+      return r.ok;
+    } catch (e) { return false; }
+  },
+  async getAgents() {
+    const r = await fetch(API_BASE + '/api/agents');
+    return r.json();
+  },
+  async getMissions() {
+    const r = await fetch(API_BASE + '/api/missions?status=pending');
+    return r.json();
+  },
+  async getStats() {
+    const r = await fetch(API_BASE + '/api/stats');
+    return r.json();
+  },
+  async getFeed() {
+    const r = await fetch(API_BASE + '/api/feed?limit=15');
+    return r.json();
+  },
+  async approveMission(id) {
+    const r = await fetch(API_BASE + '/api/missions/' + id + '/approve', { method: 'POST' });
+    return r.json();
+  },
+  async rejectMission(id) {
+    const r = await fetch(API_BASE + '/api/missions/' + id + '/reject', { method: 'POST' });
+    return r.json();
+  },
+  async updateDraft(id, text) {
+    const r = await fetch(API_BASE + '/api/missions/' + id + '/draft', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ response: text })
+    });
+    return r.json();
+  }
+};
+
 // ── SQUAD DE 8 AGENTES ──────────────────────────────────────────
 const SQUAD_AGENTS = [
   { id: 'hermes',      name: 'Hermes',         role: 'Orquestrador Geral',   icon: '👑', color: '#a855f7', status: 'ativo' },
@@ -96,17 +143,156 @@ let countRejected = 0;
 let nextMissionId = 0;
 let logCursor = 0;
 
-function initApp() {
-  renderSquadAgents();
-  renderBottomDock();
-  
-  INITIAL_MISSIONS.forEach((m, idx) => {
-    setTimeout(() => addMissionCard(m), idx * 200);
-  });
+async function initApp() {
+  // ── Detectar se o backend está rodando ──
+  isOnline = await API.check();
+  updateConnectionBadge();
+
+  if (isOnline) {
+    // ── MODO API: carregar dados reais do servidor ──
+    try {
+      // Carregar agentes do servidor
+      const agents = await API.getAgents();
+      if (agents && agents.length) {
+        SQUAD_AGENTS.length = 0;
+        agents.forEach(function(a) { SQUAD_AGENTS.push(a); });
+      }
+      renderSquadAgents();
+      renderBottomDock();
+
+      // Carregar missões pendentes
+      const missions = await API.getMissions();
+      missions.forEach(function(m, idx) {
+        setTimeout(function() { addMissionCardFromAPI(m); }, idx * 200);
+      });
+
+      // Carregar stats
+      const stats = await API.getStats();
+      countApproved = stats.approved || 0;
+      countRejected = stats.rejected || 0;
+      var mAppr = document.getElementById('metric-approved');
+      var mRej = document.getElementById('metric-rejected');
+      if (mAppr) mAppr.textContent = countApproved;
+      if (mRej) mRej.textContent = countRejected;
+
+      // Carregar feed
+      const feed = await API.getFeed();
+      feed.reverse().forEach(function(item) {
+        appendFeedItem({
+          color: item.color,
+          agent: item.agent_name,
+          text: item.text
+        });
+      });
+
+      console.log('🟢 AgentQuest HQ conectado à API em ' + API_BASE);
+    } catch (err) {
+      console.error('Erro ao carregar dados da API:', err);
+      isOnline = false;
+      updateConnectionBadge();
+      loadDemoMode();
+    }
+  } else {
+    // ── MODO DEMO: dados hardcoded ──
+    loadDemoMode();
+    console.log('🔴 AgentQuest HQ em modo DEMO (backend offline)');
+  }
 
   startFeedLoop();
   startAgentStatusCycle();
   startClockTick();
+}
+
+function loadDemoMode() {
+  renderSquadAgents();
+  renderBottomDock();
+  INITIAL_MISSIONS.forEach(function(m, idx) {
+    setTimeout(function() { addMissionCard(m); }, idx * 200);
+  });
+}
+
+function updateConnectionBadge() {
+  var badge = document.getElementById('badge-counter');
+  if (!badge) return;
+  var dot = isOnline ? '🟢' : '🔴';
+  var label = isOnline ? 'API ONLINE' : 'MODO DEMO';
+  badge.title = label;
+  // Adicionar indicador de conexão ao topbar
+  var existing = document.getElementById('connection-indicator');
+  if (!existing) {
+    existing = document.createElement('span');
+    existing.id = 'connection-indicator';
+    existing.style.cssText = 'font-size: 10px; margin-left: 8px; padding: 2px 8px; border-radius: 8px; font-weight: 600;';
+    badge.parentElement.insertBefore(existing, badge.nextSibling);
+  }
+  existing.textContent = dot + ' ' + label;
+  existing.style.background = isOnline ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)';
+  existing.style.color = isOnline ? '#4ade80' : '#f87171';
+  existing.style.border = isOnline ? '1px solid rgba(34,197,94,0.3)' : '1px solid rgba(239,68,68,0.3)';
+}
+
+function addMissionCardFromAPI(data) {
+  // Converte formato da API para formato do card
+  addMissionCardWithId(data.id, {
+    source: data.source,
+    title: data.title,
+    agent: data.agent,
+    deadline: data.deadline,
+    urgent: data.urgent,
+    channel: data.channel,
+    response: data.response
+  });
+}
+
+function addMissionCardWithId(serverId, data) {
+  var list = document.getElementById('missions-list');
+  if (!list) return;
+  var currentCards = list.querySelectorAll('.card-mission');
+
+  if (currentCards.length >= 6) {
+    showToast('⚠️ Limite de 6 missões simultâneas atingido. Aprove ou rejeite itens.', 'info');
+    return;
+  }
+
+  var id = serverId || (++nextMissionId);
+  var card = document.createElement('article');
+  card.className = 'card-mission';
+  card.id = 'mission-card-' + id;
+  card.dataset.serverId = serverId || '';
+
+  var sourceLabel = data.source === 'whatsapp' ? '💬 WhatsApp' : (data.source === 'telegram' ? '✈️ Telegram' : '📧 E-mail');
+
+  card.innerHTML =
+    '<div class="mission-header-bar ' + data.source + '">' +
+      '<span>' + sourceLabel + '</span>' +
+      (data.urgent ? '<span class="tag-urgente">URGENTE</span>' : '') +
+    '</div>' +
+    '<div class="mission-content-box">' +
+      '<div class="mission-description">' + data.title + '</div>' +
+      '<div class="mission-info-tags">' +
+        '<span class="info-tag">🤖 Agente: <strong>' + data.agent + '</strong></span>' +
+        '<span class="info-tag">📅 Prazo: ' + data.deadline + '</span>' +
+      '</div>' +
+      '<button class="draft-toggle-btn" onclick="toggleDraftAccordion(this)" title="Expandir resposta preparada pelo agente">' +
+        '<span>✍️ Ver Ação & Resposta Preparada</span>' +
+        '<span class="draft-arrow">▼</span>' +
+      '</button>' +
+      '<div class="draft-collapse">' +
+        '<div class="draft-card-inner">' +
+          '<div class="draft-header-label"><span>⚡</span> Resposta pronta para execução pós-aprovação:</div>' +
+          '<div class="draft-body-text" id="draft-text-' + id + '">' + data.response + '</div>' +
+          '<div class="draft-dispatch-channel"><span>🚀</span> ' + data.channel + '</div>' +
+          '<button class="draft-edit-action" onclick="openEditDraftModal(' + id + ')">✏️ Editar texto da resposta antes de aprovar</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="mission-buttons-row">' +
+        '<button class="btn-action btn-approve-exec" onclick="handleApproveMission(' + id + ')" title="Aprova e executa a resposta imediatamente"><span>✅</span> Aprovar & Executar</button>' +
+        '<button class="btn-action btn-reject-task" onclick="handleRejectMission(' + id + ')" title="Descarta a ação sugerida"><span>❌</span> Rejeitar</button>' +
+      '</div>' +
+    '</div>';
+
+  list.appendChild(card);
+  refreshCounters();
 }
 
 function renderSquadAgents() {
@@ -216,10 +402,10 @@ function toggleDraftAccordion(btn) {
 }
 
 function openEditDraftModal(id) {
-  const textEl = document.getElementById('draft-text-' + id);
+  var textEl = document.getElementById('draft-text-' + id);
   if (!textEl) return;
-  const currentText = textEl.innerText;
-  const newText = prompt('Editar a resposta rascunhada pelo agente antes do envio:', currentText);
+  var currentText = textEl.innerText;
+  var newText = prompt('Editar a resposta rascunhada pelo agente antes do envio:', currentText);
   if (newText !== null && newText.trim() !== '') {
     textEl.innerText = newText;
     showToast('✍️ Resposta atualizada com sucesso!', 'info');
@@ -228,16 +414,21 @@ function openEditDraftModal(id) {
       agent: 'Hermes',
       text: 'Humano editou o rascunho da missão <strong>#' + id + '</strong>'
     });
+    // Persistir no banco via API
+    if (isOnline) {
+      API.updateDraft(id, newText).catch(function(e) { console.error('Erro ao salvar rascunho:', e); });
+    }
   }
 }
 
 function handleApproveMission(id) {
-  const card = document.getElementById('mission-card-' + id);
+  var card = document.getElementById('mission-card-' + id);
   if (!card) return;
 
   card.classList.add('approving');
   countApproved++;
-  document.getElementById('metric-approved').textContent = countApproved;
+  var mAppr = document.getElementById('metric-approved');
+  if (mAppr) mAppr.textContent = countApproved;
 
   showToast('🚀 Aprovado! Resposta despachada com sucesso.', 'success');
   appendFeedItem({
@@ -246,19 +437,25 @@ function handleApproveMission(id) {
     text: 'Aprovou e executou ação da missão <strong>#' + id + '</strong> — Resposta enviada!'
   });
 
-  setTimeout(() => {
+  // Persistir no banco via API
+  if (isOnline) {
+    API.approveMission(id).catch(function(e) { console.error('Erro ao aprovar:', e); });
+  }
+
+  setTimeout(function() {
     card.remove();
     refreshCounters();
   }, 480);
 }
 
 function handleRejectMission(id) {
-  const card = document.getElementById('mission-card-' + id);
+  var card = document.getElementById('mission-card-' + id);
   if (!card) return;
 
   card.classList.add('rejecting');
   countRejected++;
-  document.getElementById('metric-rejected').textContent = countRejected;
+  var mRej = document.getElementById('metric-rejected');
+  if (mRej) mRej.textContent = countRejected;
 
   showToast('❌ Missão rejeitada e arquivada.', 'error');
   appendFeedItem({
@@ -267,7 +464,12 @@ function handleRejectMission(id) {
     text: 'Rejeitou a sugestão da missão <strong>#' + id + '</strong> — Nenhuma ação externa realizada.'
   });
 
-  setTimeout(() => {
+  // Persistir no banco via API
+  if (isOnline) {
+    API.rejectMission(id).catch(function(e) { console.error('Erro ao rejeitar:', e); });
+  }
+
+  setTimeout(function() {
     card.remove();
     refreshCounters();
   }, 480);

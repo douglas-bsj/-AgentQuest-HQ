@@ -28,3 +28,6 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+backend/database.sqlite3
+backend/__pycache__/
+__pycache__/
