@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AgentQuest HQ — Painel de Missões & Ações</title>
+  <title>AgentQuest HQ — Painel de Missões & BI Executivo</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -25,10 +25,16 @@
   </div>
   
   <div class="top-actions">
+    <!-- BOTÃO SOLICITAR RELATÓRIO AO HERMES (TIPO POWER BI) -->
+    <button class="top-btn" onclick="openReportModal()" style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.25), rgba(99, 102, 241, 0.25)); border-color: rgba(168, 85, 247, 0.4); color: #e9d5ff;" title="Solicitar Relatório Inteligente / BI ao Hermes">
+      <span>📊</span> <strong>Relatórios com Hermes</strong>
+    </button>
+    
     <button class="top-btn" onclick="addRandomMission()" title="Simular novo evento recebido">
       <span>🔄</span> Novo Evento
     </button>
-    <button class="top-btn" onclick="showToast('⚙️ Configurações do Hermes Agent e canais de entrada', 'info')">
+    
+    <button class="top-btn" onclick="showToast('⚙️ Painel de configurações dos agentes e canais', 'info')">
       <span>⚙️</span>
     </button>
   </div>
@@ -99,6 +105,167 @@
   <div class="squad-dock" id="squad-dock"></div>
   <div class="clock-display" id="clock-display">--:--:--</div>
 </footer>
+
+<!-- ── HERMES REPORT & BI MODAL ─────────────────────────────── -->
+<div id="report-modal-overlay">
+  <div class="report-modal-container">
+    
+    <!-- MODAL HEADER -->
+    <div class="report-modal-header">
+      <div class="report-modal-title">
+        <span class="report-modal-title-icon">👑</span>
+        <div class="report-modal-title-text">
+          <h3>Hermes Intelligence BI & Relatórios</h3>
+          <p>Solicite relatórios consolidados, métricas e análises executivas para o seu time de agentes</p>
+        </div>
+      </div>
+      <button class="btn-close-modal" onclick="closeReportModal()">✕</button>
+    </div>
+
+    <!-- MODAL BODY -->
+    <div class="report-modal-body">
+      
+      <!-- VIEW 1: SELETOR DE RELATÓRIO (HERMES DIALOG) -->
+      <div id="report-view-select">
+        <div class="hermes-dialog-bubble">
+          <div class="hermes-avatar-circle">👑</div>
+          <div class="hermes-dialog-text">
+            <strong>Olá! Eu sou o Hermes.</strong> Meu time e eu analisamos todas as mensagens, extratos e documentos recebidos. Qual tipo de relatório executivo você gostaria que nós compilássemos agora?
+          </div>
+        </div>
+
+        <div class="report-presets-grid">
+          <!-- CARD 1: FINANCEIRO -->
+          <div class="preset-card-btn" onclick="generateReportPreset('financeiro')">
+            <div class="preset-icon-title">
+              <span>💰</span> Balanço Financeiro & Caixa
+            </div>
+            <p class="preset-desc">Faturamento, contas a pagar, faturas pendentes e fluxo de recebimentos da semana.</p>
+          </div>
+
+          <!-- CARD 2: COMERCIAL -->
+          <div class="preset-card-btn" onclick="generateReportPreset('comercial')">
+            <div class="preset-icon-title">
+              <span>📈</span> Funil de Vendas & Leads
+            </div>
+            <p class="preset-desc">Leads do WhatsApp/E-mail, propostas enviadas, taxa de conversão e follow-ups quentes.</p>
+          </div>
+
+          <!-- CARD 3: GERAL 360 -->
+          <div class="preset-card-btn" onclick="generateReportPreset('executivo')">
+            <div class="preset-icon-title">
+              <span>📊</span> Visão Executiva 360°
+            </div>
+            <p class="preset-desc">Resumo integrado com métricas de todos os setores e pendências críticas prioritárias.</p>
+          </div>
+
+          <!-- CARD 4: JURÍDICO LGPD -->
+          <div class="preset-card-btn" onclick="generateReportPreset('juridico')">
+            <div class="preset-icon-title">
+              <span>⚖️</span> Auditoria Jurídica & LGPD
+            </div>
+            <p class="preset-desc">Status de contratos, cláusulas de risco identificadas e conformidade de dados.</p>
+          </div>
+
+          <!-- CARD 5: DOSSIÊ CLIENTE -->
+          <div class="preset-card-btn" onclick="generateReportPreset('cliente')">
+            <div class="preset-icon-title">
+              <span>👤</span> Raio-X / Dossiê do Cliente
+            </div>
+            <p class="preset-desc">Prontuário completo de um cliente específico: histórico, compras, conversas e notas.</p>
+          </div>
+
+          <!-- CARD 6: OPERACIONAL -->
+          <div class="preset-card-btn" onclick="generateReportPreset('operacional')">
+            <div class="preset-icon-title">
+              <span>⚡</span> Produtividade dos Agentes
+            </div>
+            <p class="preset-desc">Tempo médio de triagem, volume de mensagens por canal e taxa de aprovação.</p>
+          </div>
+        </div>
+
+        <!-- CONSULTA LIVRE / PROMPT PERSONALIZADO -->
+        <div class="custom-query-box">
+          <span style="font-size: 16px;">💬</span>
+          <input type="text" id="custom-query-text" class="custom-query-input" placeholder="Ou digite o que você precisa: ex: 'Hermes, mostre quem atrasou pagamento este mês...'" onkeydown="if(event.key==='Enter') generateReportCustom()">
+          <button class="btn-generate-report" onclick="generateReportCustom()">
+            <span>✨</span> Gerar Relatório
+          </button>
+        </div>
+      </div>
+
+      <!-- VIEW 2: LOADING / AGENT ORBIT ANIMATION -->
+      <div id="report-view-loading" class="report-loading-container">
+        <div class="loading-squad-orbit">
+          <div class="orbit-agent-badge" style="color: #a855f7; border-color: #a855f7;">👑</div>
+          <div class="orbit-agent-badge" style="color: #eab308; border-color: #eab308; animation-delay: 0.2s;">💰</div>
+          <div class="orbit-agent-badge" style="color: #ef4444; border-color: #ef4444; animation-delay: 0.4s;">📈</div>
+          <div class="orbit-agent-badge" style="color: #22c55e; border-color: #22c55e; animation-delay: 0.6s;">✅</div>
+        </div>
+        <div class="loading-step-text" id="loading-agent-step">Hermes orquestrando os agentes especialistas...</div>
+        <div class="loading-subtext">Cruzando dados de conversas, faturas e registros locais...</div>
+      </div>
+
+      <!-- VIEW 3: POWER BI DASHBOARD VIEW -->
+      <div id="report-view-content" class="report-content-view">
+        
+        <div class="report-toolbar-bar">
+          <div class="report-main-heading">
+            <h2 id="report-active-title">📊 Relatório Executivo Integrado</h2>
+            <p id="report-active-subtitle">Período: Últimos 30 dias • Consolidado via WhatsApp, Telegram e E-mails</p>
+          </div>
+          
+          <div class="report-export-actions">
+            <button class="report-back-btn" onclick="backToReportSelect()">
+              <span>←</span> Outro Relatório
+            </button>
+            <button class="btn-export" onclick="showToast('📥 Relatório salvo em outputs/relatorio.pdf', 'success')">
+              <span>📄</span> PDF
+            </button>
+            <button class="btn-export" onclick="showToast('📊 Planilha salva em outputs/metricas.xlsx', 'success')">
+              <span>📊</span> Excel (.xlsx)
+            </button>
+          </div>
+        </div>
+
+        <!-- KPI SUMMARY CARDS -->
+        <div class="bi-kpi-grid" id="bi-kpi-container"></div>
+
+        <!-- CHARTS SECTION -->
+        <div class="bi-charts-grid">
+          <!-- CHART 1: BAR CHART -->
+          <div class="bi-chart-card">
+            <div class="bi-chart-title">
+              <span id="chart1-title">📈 Entradas vs. Saídas por Categoria</span>
+              <span style="font-size: 10px; color: #64748b;">R$ Milhares</span>
+            </div>
+            <div class="bar-chart-row" id="chart1-bars"></div>
+          </div>
+
+          <!-- CHART 2: CHANNEL DISTRIBUTION -->
+          <div class="bi-chart-card">
+            <div class="bi-chart-title">
+              <span>💬 Distribuição por Canal de Origem</span>
+              <span style="font-size: 10px; color: #64748b;">Mensagens</span>
+            </div>
+            <div class="bar-chart-row" id="chart2-bars"></div>
+          </div>
+        </div>
+
+        <!-- EXECUTIVE SYNTHESIS (HERMES AI TAKEAWAY) -->
+        <div class="hermes-synthesis-box">
+          <div class="synthesis-header">
+            <span>👑</span> Síntese Executiva & Recomendações do Hermes
+          </div>
+          <div class="synthesis-body" id="hermes-synthesis-text"></div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+</div>
 
 <div id="toasts"></div>
 
