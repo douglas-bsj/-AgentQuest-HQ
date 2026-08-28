@@ -17,6 +17,7 @@ from backend.database import init_db, get_db, Mission, AgentLog, ActionHistory
 from backend.agents.hermes_bridge import hermes_orchestrator
 from backend.watcher import start_watcher_thread
 from backend.tools.obsidian_bridge import obsidian_bridge
+from backend.tools.dispatcher import action_dispatcher
 
 
 # ── Lifespan: inicializa o banco e o watcher ao subir o servidor ──
@@ -201,6 +202,18 @@ def approve_mission(mission_id: int, db: Session = Depends(get_db)):
         )
     except Exception as e:
         print(f"[OBSIDIAN] Erro ao sincronizar cofre: {e}")
+
+    # ── Execução Real do Disparo (E-mail, Telegram, WhatsApp, outputs/) ──
+    try:
+        dispatch_result = action_dispatcher.dispatch(
+            source=mission.source,
+            destination=client_name,
+            subject=mission.title,
+            message_text=mission.response
+        )
+        print(f"[DISPATCH] Resultado da missão #{mission.id}: {dispatch_result}")
+    except Exception as e:
+        print(f"[DISPATCH] Erro no disparo da ação: {e}")
 
     return mission
 
