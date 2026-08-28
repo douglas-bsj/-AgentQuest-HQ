@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.database import init_db, get_db, Mission, AgentLog, ActionHistory
+from backend.agents.hermes_bridge import hermes_orchestrator
 
 
 # ── Lifespan: inicializa o banco ao subir o servidor ─────────────
@@ -109,6 +110,28 @@ AGENTS_STATE = [
 # ══════════════════════════════════════════════════════════════════
 # ── ENDPOINTS ────────────────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════════
+
+class ProcessInput(BaseModel):
+    text: str
+    source: str = "whatsapp"
+
+
+@app.post("/api/process", response_model=MissionOut)
+def process_message(body: ProcessInput, db: Session = Depends(get_db)):
+    """
+    Aciona o pipeline completo do Hermes com os 8 agentes:
+    Atendente -> Administrativo -> Especialista -> Revisor -> SQLite
+    """
+    if not body.text.strip():
+        raise HTTPException(status_code=400, detail="Texto não pode ser vazio")
+    
+    mission = hermes_orchestrator.process_incoming_event(
+        raw_text=body.text,
+        source=body.source.lower(),
+        db=db
+    )
+    return mission
+
 
 @app.get("/api/agents", response_model=list[AgentInfo])
 def list_agents():

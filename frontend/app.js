@@ -42,6 +42,14 @@ const API = {
       body: JSON.stringify({ response: text })
     });
     return r.json();
+  },
+  async processEvent(text, source) {
+    const r = await fetch(API_BASE + '/api/process', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text, source: source })
+    });
+    return r.json();
   }
 };
 
@@ -495,15 +503,49 @@ function refreshCounters() {
   }
 }
 
-function addRandomMission() {
-  const poolItem = EVENT_POOL[Math.floor(Math.random() * EVENT_POOL.length)];
-  addMissionCard(poolItem);
-  appendFeedItem({
-    color: '#a855f7',
-    agent: 'Hermes',
-    text: 'Novo arquivo recebido via <strong>' + poolItem.source + '</strong> — Triagem iniciada!'
-  });
-  showToast('📥 Novo evento detectado no inbox!', 'info');
+async function addRandomMission() {
+  const sampleMessages = [
+    { text: "Olá! Gostaria de saber qual o prazo para entrega do módulo de integração da proposta #884.", source: "whatsapp" },
+    { text: "Prezados, favor enviar a 2ª via da fatura #1092 com vencimento atualizado e chave Pix.", source: "whatsapp" },
+    { text: "Revisamos o contrato de prestação de serviços e solicitamos adequação da cláusula 5 à LGPD.", source: "email" },
+    { text: "Alinhamento com equipe de infraestrutura sobre a janela de manutenção no próximo sábado.", source: "telegram" }
+  ];
+
+  const randomItem = sampleMessages[Math.floor(Math.random() * sampleMessages.length)];
+
+  if (isOnline) {
+    showToast('⚡ Hermes & Squad processando novo evento...', 'info');
+    try {
+      const newMission = await API.processEvent(randomItem.text, randomItem.source);
+      if (newMission && newMission.id) {
+        addMissionCardFromAPI(newMission);
+        showToast('✅ Nova missão criada pelo squad de IA!', 'success');
+        // Atualiza feed
+        const feed = await API.getFeed();
+        if (feed && feed.length) {
+          const latest = feed[0];
+          appendFeedItem({
+            color: latest.color,
+            agent: latest.agent_name,
+            text: latest.text
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao processar evento via IA:', e);
+      showToast('⚠️ Erro ao chamar API, usando modo local.', 'error');
+      addMissionCard(EVENT_POOL[Math.floor(Math.random() * EVENT_POOL.length)]);
+    }
+  } else {
+    const poolItem = EVENT_POOL[Math.floor(Math.random() * EVENT_POOL.length)];
+    addMissionCard(poolItem);
+    appendFeedItem({
+      color: '#a855f7',
+      agent: 'Hermes',
+      text: 'Novo arquivo recebido via <strong>' + poolItem.source + '</strong> — Triagem iniciada!'
+    });
+    showToast('📥 Novo evento simulado no inbox!', 'info');
+  }
 }
 
 function startFeedLoop() {
