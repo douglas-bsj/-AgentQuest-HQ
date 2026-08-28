@@ -219,10 +219,10 @@
             <button class="report-back-btn" onclick="backToReportSelect()">
               <span>←</span> Outro Relatório
             </button>
-            <button class="btn-export" onclick="showToast('📥 Relatório salvo em outputs/relatorio.pdf', 'success')">
+            <button class="btn-export" onclick="exportCurrentReport('pdf')">
               <span>📄</span> PDF
             </button>
-            <button class="btn-export" onclick="showToast('📊 Planilha salva em outputs/metricas.xlsx', 'success')">
+            <button class="btn-export" onclick="exportCurrentReport('xlsx')">
               <span>📊</span> Excel (.xlsx)
             </button>
           </div>

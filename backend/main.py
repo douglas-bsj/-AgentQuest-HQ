@@ -18,6 +18,7 @@ from backend.agents.hermes_bridge import hermes_orchestrator
 from backend.watcher import start_watcher_thread
 from backend.tools.obsidian_bridge import obsidian_bridge
 from backend.tools.dispatcher import action_dispatcher
+from backend.tools.report_generator import generate_bi_report, export_pdf_file, export_xlsx_file
 
 
 # ── Lifespan: inicializa o banco e o watcher ao subir o servidor ──
@@ -293,6 +294,34 @@ class SaveReportInput(BaseModel):
     subtitle: str = ""
     kpis: list = []
     synthesis: str = ""
+
+
+@app.get("/api/reports/generate")
+def api_generate_report(type: str = "executivo", query: str = "", db: Session = Depends(get_db)):
+    """Gera dados reais do relatório estilo Power BI via Hermes + Gemini + SQLite + Obsidian."""
+    return generate_bi_report(report_type=type, custom_query=query, db=db)
+
+
+@app.get("/api/reports/export/pdf")
+def api_export_pdf(type: str = "executivo", query: str = "", db: Session = Depends(get_db)):
+    """Gera e retorna download de arquivo PDF."""
+    report_data = generate_bi_report(report_type=type, custom_query=query, db=db)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    pdf_filename = f"relatorio_{type}_{timestamp}.pdf"
+    pdf_path = os.path.join(FRONTEND_DIR, "..", "outputs", pdf_filename)
+    export_pdf_file(report_data, pdf_path)
+    return FileResponse(pdf_path, media_type="application/pdf", filename=pdf_filename)
+
+
+@app.get("/api/reports/export/xlsx")
+def api_export_xlsx(type: str = "executivo", query: str = "", db: Session = Depends(get_db)):
+    """Gera e retorna download de planilha Excel (.xlsx)."""
+    report_data = generate_bi_report(report_type=type, custom_query=query, db=db)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    xlsx_filename = f"metricas_{type}_{timestamp}.xlsx"
+    xlsx_path = os.path.join(FRONTEND_DIR, "..", "outputs", xlsx_filename)
+    export_xlsx_file(report_data, db, xlsx_path)
+    return FileResponse(xlsx_path, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=xlsx_filename)
 
 
 @app.post("/api/reports/save")

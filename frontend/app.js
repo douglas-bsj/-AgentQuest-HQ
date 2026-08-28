@@ -50,6 +50,11 @@ const API = {
       body: JSON.stringify({ text: text, source: source })
     });
     return r.json();
+  },
+  async generateReport(type, query) {
+    const q = query ? '&query=' + encodeURIComponent(query) : '';
+    const r = await fetch(API_BASE + '/api/reports/generate?type=' + type + q);
+    return r.json();
   }
 };
 
@@ -775,19 +780,88 @@ function backToReportSelect() {
   document.getElementById('report-view-content').style.display = 'none';
 }
 
-function generateReportPreset(presetKey) {
-  const data = REPORT_TEMPLATES[presetKey] || REPORT_TEMPLATES.executivo;
-  runReportGeneration(data);
+let currentActiveReportType = 'executivo';
+let currentActiveReportQuery = '';
+
+async function generateReportPreset(presetKey) {
+  currentActiveReportType = presetKey;
+  currentActiveReportQuery = '';
+  
+  if (isOnline) {
+    runReportLoading();
+    try {
+      const realData = await API.generateReport(presetKey, '');
+      renderReportView(realData);
+    } catch (e) {
+      console.error('Erro ao gerar relatório via API:', e);
+      const fallbackData = REPORT_TEMPLATES[presetKey] || REPORT_TEMPLATES.executivo;
+      renderReportView(fallbackData);
+    }
+  } else {
+    const data = REPORT_TEMPLATES[presetKey] || REPORT_TEMPLATES.executivo;
+    runReportGenerationOffline(data);
+  }
 }
 
-function generateReportCustom() {
+async function generateReportCustom() {
   const query = document.getElementById('custom-query-text').value.trim();
   if (!query) {
     showToast('Por favor, digite sua pergunta para o Hermes.', 'info');
     return;
   }
   
-  const customData = {
+  currentActiveReportType = 'custom';
+  currentActiveReportQuery = query;
+
+  if (isOnline) {
+    runReportLoading();
+    try {
+      const realData = await API.generateReport('custom', query);
+      renderReportView(realData);
+    } catch (e) {
+      console.error('Erro ao gerar relatório via API:', e);
+      const customData = getOfflineCustomData(query);
+      renderReportView(customData);
+    }
+  } else {
+    const customData = getOfflineCustomData(query);
+    runReportGenerationOffline(customData);
+  }
+}
+
+function runReportLoading() {
+  document.getElementById('report-view-select').style.display = 'none';
+  document.getElementById('report-view-loading').style.display = 'block';
+  document.getElementById('report-view-content').style.display = 'none';
+
+  const steps = [
+    'Hermes consultando o banco de dados e o cofre Obsidian...',
+    'Compilando métricas reais de faturamento e vendas...',
+    'Revisor validando coerência dos números...',
+    'Formatando painel executivo estilo Power BI...'
+  ];
+
+  let sIdx = 0;
+  const stepInterval = setInterval(() => {
+    sIdx++;
+    if (sIdx < steps.length) {
+      const el = document.getElementById('loading-agent-step');
+      if (el) el.textContent = steps[sIdx];
+    }
+  }, 400);
+
+  setTimeout(() => clearInterval(stepInterval), 3000);
+}
+
+function runReportGenerationOffline(reportData) {
+  runReportLoading();
+  setTimeout(() => {
+    renderReportView(reportData);
+  }, 1400);
+}
+
+function getOfflineCustomData(query) {
+  return {
     title: '💬 Relatório Personalizado: ' + (query.length > 35 ? query.substring(0, 35) + '...' : query),
     subtitle: 'Consulta livre respondida pelo Hermes & Squad • Base de Dados Local',
     kpis: [
@@ -815,34 +889,17 @@ function generateReportCustom() {
         '<li>Recomendamos manter o plano de ação sugerido nas missões ativas para garantir a resolução até o fim da semana.</li>' +
       '</ul>'
   };
-
-  runReportGeneration(customData);
 }
 
-function runReportGeneration(reportData) {
-  document.getElementById('report-view-select').style.display = 'none';
-  document.getElementById('report-view-loading').style.display = 'block';
-  document.getElementById('report-view-content').style.display = 'none';
-
-  const steps = [
-    'Hermes consultando os agentes especialistas...',
-    'Compilando métricas financeiras e comerciais...',
-    'Revisor validando coerência dos números...',
-    'Formatando painel executivo estilo Power BI...'
-  ];
-
-  let sIdx = 0;
-  const stepInterval = setInterval(() => {
-    sIdx++;
-    if (sIdx < steps.length) {
-      document.getElementById('loading-agent-step').textContent = steps[sIdx];
-    }
-  }, 350);
-
-  setTimeout(() => {
-    clearInterval(stepInterval);
-    renderReportView(reportData);
-  }, 1400);
+function exportCurrentReport(format) {
+  if (isOnline) {
+    const q = currentActiveReportQuery ? '&query=' + encodeURIComponent(currentActiveReportQuery) : '';
+    const url = API_BASE + '/api/reports/export/' + format + '?type=' + currentActiveReportType + q;
+    window.open(url, '_blank');
+    showToast('📥 Download do ' + format.toUpperCase() + ' iniciado e salvo em outputs/', 'success');
+  } else {
+    showToast('📥 [DEMO] Relatório salvo na pasta outputs/', 'info');
+  }
 }
 
 function renderReportView(data) {
