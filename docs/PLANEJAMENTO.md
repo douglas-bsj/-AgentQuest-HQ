@@ -17,7 +17,7 @@ Sistema local de agentes de IA para extração de pendências de conversas (What
 ### Pipeline Base (todos os documentos passam por aqui)
 | Agente | Função |
 |---|---|
-| **Leitor** | Lê e transcreve o conteúdo dos arquivos e conversas |
+| **Atendente** | Recebe, lê e transcreve mensagens e arquivos (WhatsApp, Telegram, Email, docs) |
 | **Administrativo** | Identifica pendências, responsáveis, prazos e classifica o tipo |
 | **Planejador** | Sugere próximos passos e ações para cada pendência |
 | **Revisor** | Valida e melhora os resultados (usa Fase Reflexiva do Hermes) |
@@ -129,7 +129,7 @@ agentquest-hq/
 ├── backend/
 │   ├── agents/
 │   │   ├── hermes_bridge.py      # Interface com o Hermes Agent
-│   │   ├── reader.py             # Agente Leitor
+│   │   ├── attendant.py             # Agente Leitor
 │   │   ├── administrative.py          # Agente Administrativo + roteador
 │   │   ├── planner.py            # Agente Planejador
 │   │   ├── reviewer.py           # Agente Revisor
@@ -139,7 +139,7 @@ agentquest-hq/
 │   │   ├── hr.py                 # Agente RH
 │   │   └── attendant.py          # Agente Atendente / Secretaria
 │   ├── tools/
-│   │   ├── file_reader.py
+│   │   ├── file_attendant.py
 │   │   ├── whatsapp_parser.py
 │   │   ├── telegram_parser.py
 │   │   └── email_parser.py
@@ -179,5 +179,6 @@ agentquest-hq/
 - Google Gemini Docs: https://ai.google.dev/docs
 - FastAPI: https://fastapi.tiangolo.com
 - Inspiração multi-agente: https://github.com/douglas-bsj/multiagentes-em-debate
+
 
 
