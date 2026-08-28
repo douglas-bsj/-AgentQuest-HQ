@@ -272,6 +272,9 @@ function addMissionCardWithId(serverId, data) {
   card.className = 'card-mission';
   card.id = 'mission-card-' + id;
   card.dataset.serverId = serverId || '';
+  card.dataset.agent = data.agent || 'Agente';
+  card.dataset.channel = data.channel || 'Canal';
+  card.dataset.title = data.title || 'Missão';
 
   var sourceLabel = data.source === 'whatsapp' ? '💬 WhatsApp' : (data.source === 'telegram' ? '✈️ Telegram' : '📧 E-mail');
 
@@ -295,11 +298,12 @@ function addMissionCardWithId(serverId, data) {
           '<div class="draft-header-label"><span>⚡</span> Resposta pronta para execução pós-aprovação:</div>' +
           '<div class="draft-body-text" id="draft-text-' + id + '">' + data.response + '</div>' +
           '<div class="draft-dispatch-channel"><span>🚀</span> ' + data.channel + '</div>' +
-          '<button class="draft-edit-action" onclick="openEditDraftModal(' + id + ')">✏️ Editar texto da resposta antes de aprovar</button>' +
+          '<button class="draft-edit-action" onclick="openEditDraftModal(' + id + ')">✏️ Editar texto da resposta no modal</button>' +
         '</div>' +
       '</div>' +
       '<div class="mission-buttons-row">' +
-        '<button class="btn-action btn-approve-exec" onclick="handleApproveMission(' + id + ')" title="Aprova e executa a resposta imediatamente"><span>✅</span> Aprovar & Executar</button>' +
+        '<button class="btn-action btn-approve-exec" onclick="handleApproveMission(' + id + ')" title="Aprova e executa a resposta imediatamente"><span>✅</span> Aprovar</button>' +
+        '<button class="btn-action btn-edit-inline" onclick="openEditDraftModal(' + id + ')" title="Editar o texto da resposta antes do envio"><span>✏️</span> Editar</button>' +
         '<button class="btn-action btn-reject-task" onclick="handleRejectMission(' + id + ')" title="Descarta a ação sugerida"><span>❌</span> Rejeitar</button>' +
       '</div>' +
     '</div>';
@@ -372,6 +376,9 @@ function addMissionCard(data) {
   const card = document.createElement('article');
   card.className = 'card-mission';
   card.id = 'mission-card-' + id;
+  card.dataset.agent = data.agent || 'Agente';
+  card.dataset.channel = data.channel || 'Canal';
+  card.dataset.title = data.title || 'Missão';
 
   const sourceLabel = data.source === 'whatsapp' ? '💬 WhatsApp' : data.source === 'telegram' ? '✈️ Telegram' : '📧 E-mail';
 
@@ -395,11 +402,12 @@ function addMissionCard(data) {
           '<div class="draft-header-label"><span>⚡</span> Resposta pronta para execução pós-aprovação:</div>' +
           '<div class="draft-body-text" id="draft-text-' + id + '">' + data.response + '</div>' +
           '<div class="draft-dispatch-channel"><span>🚀</span> ' + data.channel + '</div>' +
-          '<button class="draft-edit-action" onclick="openEditDraftModal(' + id + ')">✏️ Editar texto da resposta antes de aprovar</button>' +
+          '<button class="draft-edit-action" onclick="openEditDraftModal(' + id + ')">✏️ Editar texto da resposta no modal</button>' +
         '</div>' +
       '</div>' +
       '<div class="mission-buttons-row">' +
-        '<button class="btn-action btn-approve-exec" onclick="handleApproveMission(' + id + ')" title="Aprova e executa a resposta imediatamente"><span>✅</span> Aprovar & Executar</button>' +
+        '<button class="btn-action btn-approve-exec" onclick="handleApproveMission(' + id + ')" title="Aprova e executa a resposta imediatamente"><span>✅</span> Aprovar</button>' +
+        '<button class="btn-action btn-edit-inline" onclick="openEditDraftModal(' + id + ')" title="Editar o texto da resposta antes do envio"><span>✏️</span> Editar</button>' +
         '<button class="btn-action btn-reject-task" onclick="handleRejectMission(' + id + ')" title="Descarta a ação sugerida"><span>❌</span> Rejeitar</button>' +
       '</div>' +
     '</div>';
@@ -414,24 +422,98 @@ function toggleDraftAccordion(btn) {
   collapse.classList.toggle('open');
 }
 
+// ── EDIT DRAFT MODAL STATE & HANDLERS ──
+let currentEditingMissionId = null;
+
 function openEditDraftModal(id) {
-  var textEl = document.getElementById('draft-text-' + id);
-  if (!textEl) return;
-  var currentText = textEl.innerText;
-  var newText = prompt('Editar a resposta rascunhada pelo agente antes do envio:', currentText);
-  if (newText !== null && newText.trim() !== '') {
-    textEl.innerText = newText;
-    showToast('✍️ Resposta atualizada com sucesso!', 'info');
-    appendFeedItem({
-      color: '#a855f7',
-      agent: 'Hermes',
-      text: 'Humano editou o rascunho da missão <strong>#' + id + '</strong>'
-    });
-    // Persistir no banco via API
-    if (isOnline) {
-      API.updateDraft(id, newText).catch(function(e) { console.error('Erro ao salvar rascunho:', e); });
-    }
+  const textEl = document.getElementById('draft-text-' + id);
+  if (!textEl) {
+    showToast('⚠️ Erro ao localizar texto da missão #' + id, 'error');
+    return;
   }
+
+  currentEditingMissionId = id;
+  const currentText = textEl.innerText.trim();
+
+  // Preenche dados da missão no modal
+  const card = document.getElementById('mission-card-' + id);
+  const agentName = card ? (card.dataset.agent || 'Especialista') : 'Especialista';
+  const channelName = card ? (card.dataset.channel || 'Canal') : 'Canal';
+  const titleText = card ? (card.dataset.title || 'Missão #' + id) : 'Missão #' + id;
+
+  document.getElementById('edit-modal-title').textContent = 'Editar Resposta — Missão #' + id;
+  document.getElementById('edit-modal-subtitle').textContent = titleText;
+  document.getElementById('edit-modal-agent').innerHTML = '🤖 Agente: <strong>' + agentName + '</strong>';
+  document.getElementById('edit-modal-channel').innerHTML = '🚀 ' + channelName;
+
+  const textarea = document.getElementById('edit-modal-textarea');
+  textarea.value = currentText;
+  updateEditCharCounter();
+
+  textarea.oninput = updateEditCharCounter;
+
+  // Abre o modal
+  const overlay = document.getElementById('edit-modal-overlay');
+  if (overlay) {
+    overlay.classList.add('active');
+    setTimeout(() => textarea.focus(), 150);
+  }
+}
+
+function updateEditCharCounter() {
+  const textarea = document.getElementById('edit-modal-textarea');
+  const counter = document.getElementById('edit-modal-chars');
+  if (textarea && counter) {
+    const chars = textarea.value.length;
+    const words = textarea.value.trim() ? textarea.value.trim().split(/\s+/).length : 0;
+    counter.textContent = chars + ' caracteres • ' + words + ' palavras';
+  }
+}
+
+function closeEditDraftModal() {
+  const overlay = document.getElementById('edit-modal-overlay');
+  if (overlay) overlay.classList.remove('active');
+  currentEditingMissionId = null;
+}
+
+function saveEditedDraft() {
+  if (!currentEditingMissionId) return;
+  const id = currentEditingMissionId;
+  const textarea = document.getElementById('edit-modal-textarea');
+  const newText = textarea ? textarea.value.trim() : '';
+
+  if (!newText) {
+    showToast('O texto da resposta não pode ficar vazio.', 'info');
+    return;
+  }
+
+  const textEl = document.getElementById('draft-text-' + id);
+  if (textEl) {
+    textEl.innerText = newText;
+  }
+
+  showToast('✍️ Resposta da missão #' + id + ' atualizada com sucesso!', 'success');
+  appendFeedItem({
+    color: '#a855f7',
+    agent: 'Hermes',
+    text: 'Humano editou o rascunho da missão <strong>#' + id + '</strong>'
+  });
+
+  // Persistir no banco via API
+  if (isOnline) {
+    API.updateDraft(id, newText).catch(function(e) { console.error('Erro ao salvar rascunho:', e); });
+  }
+
+  closeEditDraftModal();
+}
+
+function saveAndApproveDraft() {
+  if (!currentEditingMissionId) return;
+  const id = currentEditingMissionId;
+  saveEditedDraft();
+  setTimeout(() => {
+    handleApproveMission(id);
+  }, 200);
 }
 
 function handleApproveMission(id) {
@@ -953,9 +1035,13 @@ function renderReportView(data) {
 }
 
 window.addEventListener('click', (e) => {
-  const overlay = document.getElementById('report-modal-overlay');
-  if (e.target === overlay) {
+  const reportOverlay = document.getElementById('report-modal-overlay');
+  if (e.target === reportOverlay) {
     closeReportModal();
+  }
+  const editOverlay = document.getElementById('edit-modal-overlay');
+  if (e.target === editOverlay) {
+    closeEditDraftModal();
   }
 });
 

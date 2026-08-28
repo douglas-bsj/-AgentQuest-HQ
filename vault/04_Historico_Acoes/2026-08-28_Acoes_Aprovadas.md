@@ -63,3 +63,39 @@ Fico à disposição!
 
 ---
 
+## [17:10:12] Missão #7 — Agente Comercial
+- **Destinatário:** [[02_Clientes_CRM/Desconhecido|Desconhecido]]
+- **Canal:** 💬 Disparo automático via WhatsApp
+- **Decisão Humana:** ✅ Aprovado & Executado
+
+```text
+[DEMO - Revisor] Resposta simulada. Configure GEMINI_API_KEY no .env para respostas reais.
+
+Entrada recebida: Canal de envio: whatsapp
+
+Mensagem/Demanda Original recebida:
+Ola, aqui e o Carlos da AlphaTech. Gostaria de saber quando fica pronta a proposta comercial de modernizacao dos servidores.
+
+Rascunho pre...
+```
+
+---
+
+## [17:14:36] Missão #6 — Agente Comercial
+- **Destinatário:** [[02_Clientes_CRM/Desconhecido|Desconhecido]]
+- **Canal:** 💬 Disparo automático via WhatsApp
+- **Decisão Humana:** ✅ Aprovado & Executado
+
+```text
+[DEMO - Revisor] Resposta simulada. Configure GEMINI_API_KEY no .env para respostas reais.
+
+Entrada recebida: Canal de envio: whatsapp
+
+Mensagem/Demanda Original recebida:
+Ola, aqui e o Carlos da AlphaTech. Gostaria de saber quando fica pronta a proposta comercial de modernizacao dos servidores.
+
+Rascunho pre...
+```
+
+---
+

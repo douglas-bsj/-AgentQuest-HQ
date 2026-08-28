@@ -264,6 +264,47 @@
 
     </div>
 
+  <!-- EDIT DRAFT MODAL -->
+<div id="edit-modal-overlay" class="modal-overlay">
+  <div class="modal-card edit-draft-modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title-row">
+        <div class="report-brand-badge" style="background: rgba(99, 102, 241, 0.2); border-color: rgba(99, 102, 241, 0.4);">
+          <span>✏️</span> EDIÇÃO DE RESPOSTA
+        </div>
+        <h2 id="edit-modal-title">Editar Texto da Missão</h2>
+        <p id="edit-modal-subtitle">Revise ou ajuste a resposta redigida pelo agente especialista antes do envio.</p>
+      </div>
+      <button class="modal-close-btn" onclick="closeEditDraftModal()">✕</button>
+    </div>
+
+    <div class="edit-modal-body">
+      <div class="edit-mission-meta" id="edit-modal-meta">
+        <span class="info-tag" id="edit-modal-agent">🤖 Agente: --</span>
+        <span class="info-tag" id="edit-modal-channel">🚀 Canal: --</span>
+      </div>
+
+      <div class="edit-textarea-wrapper">
+        <textarea id="edit-modal-textarea" rows="10" placeholder="Digite o texto da resposta..."></textarea>
+      </div>
+
+      <div class="edit-modal-footer-info">
+        <span id="edit-modal-chars">0 caracteres</span>
+        <span style="color: #64748b;">• Suporta múltiplas linhas e formatação</span>
+      </div>
+    </div>
+
+    <div class="edit-modal-actions">
+      <button class="btn-edit-cancel" onclick="closeEditDraftModal()">
+        <span>❌</span> Cancelar
+      </button>
+      <button class="btn-edit-save" onclick="saveEditedDraft()">
+        <span>💾</span> Salvar Rascunho
+      </button>
+      <button class="btn-edit-save-approve" onclick="saveAndApproveDraft()">
+        <span>🚀</span> Salvar & Aprovar
+      </button>
+    </div>
   </div>
 </div>
 
