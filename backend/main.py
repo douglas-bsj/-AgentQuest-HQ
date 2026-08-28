@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from backend.database import init_db, get_db, Mission, AgentLog, ActionHistory
 from backend.agents.hermes_bridge import hermes_orchestrator
 from backend.watcher import start_watcher_thread
+from backend.tools.obsidian_bridge import obsidian_bridge
 
 
 # ── Lifespan: inicializa o banco e o watcher ao subir o servidor ──
@@ -162,7 +163,7 @@ def approve_mission(mission_id: int, db: Session = Depends(get_db)):
     mission.status = "approved"
     mission.resolved_at = datetime.datetime.utcnow()
 
-    # Registrar no histórico de auditoria
+    # Registrar no histórico de auditoria SQLite
     history = ActionHistory(
         mission_id=mission.id,
         action="approved",
@@ -180,6 +181,27 @@ def approve_mission(mission_id: int, db: Session = Depends(get_db)):
 
     db.commit()
     db.refresh(mission)
+
+    # ── Atualização do Cofre Obsidian (CRM + Auditoria) ──
+    try:
+        # Extrai nome do cliente a partir do título (ex: "Assunto — Nome")
+        client_name = mission.title.split("—")[-1].strip() if "—" in mission.title else "Cliente_Geral"
+        obsidian_bridge.update_client_crm(
+            client_name=client_name,
+            channel=mission.source,
+            mission_title=mission.title,
+            response_text=mission.response
+        )
+        obsidian_bridge.log_approved_action(
+            mission_id=mission.id,
+            agent_name=mission.agent,
+            client_name=client_name,
+            response_text=mission.response,
+            channel=mission.channel
+        )
+    except Exception as e:
+        print(f"[OBSIDIAN] Erro ao sincronizar cofre: {e}")
+
     return mission
 
 
@@ -251,6 +273,25 @@ def get_stats(db: Session = Depends(get_db)):
     # "processando" = agentes que estão com status processando (contagem estática)
     processing = sum(1 for a in AGENTS_STATE if a["status"] == "processando")
     return StatsOut(pending=pending, processing=processing, approved=approved, rejected=rejected)
+
+
+class SaveReportInput(BaseModel):
+    title: str
+    subtitle: str = ""
+    kpis: list = []
+    synthesis: str = ""
+
+
+@app.post("/api/reports/save")
+def save_report_vault(body: SaveReportInput):
+    """Salva um relatório do Hermes BI diretamente no cofre Obsidian."""
+    filename = obsidian_bridge.save_bi_report(
+        title=body.title,
+        subtitle=body.subtitle,
+        kpis=body.kpis,
+        synthesis=body.synthesis
+    )
+    return {"status": "success", "filename": filename, "folder": "vault/03_Relatorios_BI/"}
 
 
 # ── Servir frontend como arquivos estáticos ──────────────────────

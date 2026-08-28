@@ -10,6 +10,7 @@ from backend.agents.commercial import CommercialAgent
 from backend.agents.legal_lgpd import LegalLGPDAgent
 from backend.agents.planner import PlannerAgent
 from backend.agents.reviewer import ReviewerAgent
+from backend.tools.obsidian_bridge import obsidian_bridge
 from backend.database import SessionLocal, Mission, AgentLog
 
 
@@ -71,11 +72,13 @@ class HermesOrchestrator:
             ))
             db.commit()
 
-            # ── ETAPA 4: Especialista gera a resposta inicial ──
+            # ── ETAPA 4: Especialista gera a resposta com base no Obsidian ──
+            knowledge_rules = obsidian_bridge.get_knowledge_context()
             context = {
                 "source": source,
                 "attendant_analysis": attendant_data,
                 "routing": routing_data,
+                "knowledge_base": knowledge_rules,
                 "raw_text": raw_text
             }
 
