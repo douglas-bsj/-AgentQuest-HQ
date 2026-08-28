@@ -136,8 +136,9 @@ class ObsidianBridge:
         """
         self._ensure_folders()
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M")
-        slug_title = re.sub(r'[\\/*?:"<>|]', "", title).strip().replace(" ", "_")[:40]
-        filename = f"{timestamp}_{slug_title}.md"
+        # Remove emojis e caracteres especiais do nome do arquivo
+        clean_title = re.sub(r'[^\w\s-]', '', title).strip().replace(" ", "_")[:35] or "Relatorio_BI"
+        filename = f"{timestamp}_{clean_title}.md"
         file_path = os.path.join(REPORTS_DIR, filename)
 
         kpis_md = "\n".join([f"- **{k.get('label', 'Métrica')}:** `{k.get('value', '-')}` ({k.get('trend', '')})" for k in kpis])
