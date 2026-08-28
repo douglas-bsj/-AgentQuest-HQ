@@ -1,120 +1,121 @@
 # 🤖 AgentQuest HQ
 
-> Sistema MVP de agentes de IA para extração de pendências e follow-up — rodando 100% local no seu PC.
+> **Sistema Local de Orquestração com Multi-Agentes de IA e Centro de Inteligência Executiva.**
+> 100% Gratuito, Local e Seguro — Nenhuma ação externa é executada sem sua aprovação explícita.
 
 ---
 
-## 📋 O que é isso?
+## 🏛️ Visão Geral da Arquitetura
 
-O **AgentQuest HQ** é um web app local onde um time de **10 agentes de IA especializados** analisam mensagens do **WhatsApp**, **Telegram** e **E-mails**, extraem automaticamente pendências por área (Financeiro, Comercial, Jurídico, RH, Atendimento) e apresentam tudo num painel para **aprovação humana** antes de qualquer ação.
+O **AgentQuest HQ** é uma central autônoma de operações executivas que processa mensagens e documentos (WhatsApp, Telegram, E-mails, PDFs e planilhas), classifica as demandas por área especializada, gera respostas prontas com ações sugeridas e compila relatórios analíticos estilo Power BI sob demanda.
 
----
-
-## 🤖 Time de Agentes
-
-### Orquestrador
-| Agente | Tecnologia | Função |
-|---|---|---|
-| **Hermes Agent** | Nous Research (MIT) | Coordena todo o fluxo, memória persistente, spawna sub-agentes |
-
-### Pipeline Base
-| Agente | Função |
-|---|---|
-| **Atendente** | Recebe e lê mensagens, arquivos e conversas (WhatsApp, Telegram, Email, docs) |
-| **Administrativo** | Identifica pendências e classifica por área |
-| **Planejador** | Sugere próximos passos |
-| **Revisor** | Valida e melhora os resultados |
-
-### Agentes Especializados
-| Agente | Área | O que detecta |
-|---|---|---|
-| **💰 Financeiro** | Finanças | Cobranças, pagamentos, notas fiscais, orçamentos |
-| **📈 Comercial** | Vendas | Leads, follow-ups, propostas, oportunidades |
-| **⚖️ Jurídico (LGPD)** | Jurídico | Contratos, riscos legais, violações de LGPD |
-
----
-
-## 🔄 Fluxo
-
-`
-[WhatsApp / Telegram / E-mail / Arquivo]
-              ↓
-       [Hermes Agent]       ← Orquestrador
-              ↓
-   [Leitor] → [Administrativo]    ← Pipeline base
-              ↓
-  [Agente Especializado]    ← Financeiro / Comercial /
-                               Jurídico / RH / Atendente
-              ↓
-   [Planejador] → [Revisor] ← Valida e melhora
-              ↓
-  [Painel de Aprovação]     ← Você aprova ou rejeita
-`
+```
+                  ┌──────────────────┐
+                  │ 📥 Pasta inbox/  │ (WhatsApp, Telegram, E-mail, Documentos)
+                  └────────┬─────────┘
+                           │ (Watcher local)
+                           ▼
+                  ┌──────────────────┐
+                  │ 👑 Hermes Agent  │ (Orquestrador Geral)
+                  └────────┬─────────┘
+                           │
+       ┌───────────────────┼───────────────────┐
+       ▼                   ▼                   ▼
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│ 📖 Atendente │    │ 🔍 Admin     │    │ 📚 Obsidian  │
+│ (Leitura)    │    │ (Triagem)    │    │ (Vault Base) │
+└──────┬───────┘    └──────┬───────┘    └──────────────┘
+       └───────────────────┼───────────────────┘
+                           ▼
+        ┌──────────────────────────────────────┐
+        │       Agentes Especialistas          │
+        │ 💰 Financeiro  •  📈 Comercial       │
+        │ ⚖️ Jurídico    •  🗺️ Planejador       │
+        └──────────────────┬───────────────────┘
+                           ▼
+                  ┌──────────────────┐
+                  │   ✅ Revisor     │ (Fase Reflexiva de Qualidade)
+                  └────────┬─────────┘
+                           ▼
+                  ┌──────────────────┐
+                  │  🖥️ Painel Web   │ ➔ ✍️ Resposta Pronta
+                  │  (Aprovação)     │ ➔ 📊 Relatórios BI
+                  └────────┬─────────┘
+                           │ [Clique em Aprovar & Executar]
+                           ▼
+                  ┌──────────────────┐
+                  │ 🚀 Execução Real │ (Disparo WhatsApp/Email + Atualiza Obsidian)
+                  └──────────────────┘
+```
 
 ---
 
-## 🏗️ Stack Técnica
+## 🤖 Squad Oficial de Agentes (8 Agentes Especialistas)
 
-| Camada | Tecnologia |
-|---|---|
-| Orquestrador | Hermes Agent (Nous Research, MIT) |
-| Backend | Python 3.11+ + FastAPI |
-| Banco de Dados | SQLite |
-| IA | Google Gemini API (gratuito) |
-| Frontend | HTML + CSS + JavaScript |
-| Real-time | SSE (Server-Sent Events) |
-
----
-
-## 🚀 Como Rodar
-
-### 1. Pré-requisitos
-- Python 3.11+
-- Chave da API do Google Gemini (gratuita em https://aistudio.google.com)
-
-### 2. Instalar dependências
-`
-pip install -r requirements.txt
-`
-
-### 3. Configurar variáveis de ambiente
-`
-cp .env.example .env
-# Edite o .env e coloque sua GEMINI_API_KEY
-`
-
-### 4. Iniciar o sistema
-`
-python run.py
-`
-
-Acesse: http://localhost:8000
+| | Agente | Função | O que faz no sistema |
+|:---:|---|---|---|
+| 👑 | **Hermes** | Orquestrador Geral | Gerencia o pipeline, consulta a base de conhecimento e gera relatórios de BI sob demanda. |
+| 📖 | **Atendente** | Recepção & Leitura | Lê e decodifica mensagens do WhatsApp, Telegram, E-mails e documentos recebidos. |
+| 🔍 | **Administrativo** | Triagem & Roteamento | Classifica a demanda e direciona para a área técnica correta. |
+| 💰 | **Financeiro** | Cobranças & Caixa | Analisa faturas, extratos bancários, pagamentos e elabora comprovantes/alertas. |
+| 📈 | **Comercial** | Vendas & Propostas | Qualifica leads, rascunha propostas comerciais e programa follow-ups. |
+| ⚖️ | **Jurídico LGPD** | Contratos & Compliance | Revisa minutas contratuais, cláusulas de risco e conformidade com a LGPD (Art. 46). |
+| 🗺️ | **Planejador** | Estratégia & Prazos | Define cronogramas, próximos passos e marcos de entregas. |
+| ✅ | **Revisor** | Controle de Qualidade | Valida coerência numérica, tom de voz e clareza antes de exibir no painel. |
 
 ---
 
-## 📥 Fontes Suportadas (v1)
+## 🧠 Integração Nativa com Obsidian (`vault/`)
 
-| Fonte | Formato |
-|---|---|
-| WhatsApp | .txt (exportação de conversa) |
-| Telegram | .json (exportação de conversa) |
-| E-mail | .eml ou IMAP |
-| Documentos | .pdf, .docx, .xlsx, .txt, .md |
+A pasta `vault/` funciona como um **Cofre Nativo do Obsidian** (*Segundo Cérebro* local):
+
+```
+vault/
+├── 00_Dashboard/          ➔ Painel de navegação e indicadores
+├── 01_Base_Conhecimento/  ➔ Regras de negócio que os agentes LEEM antes de responder
+├── 02_Clientes_CRM/       ➔ Prontuário dos clientes atualizado automaticamente
+├── 03_Relatorios_BI/      ➔ Relatórios e balanços exportados pelo Hermes
+└── 04_Historico_Acoes/    ➔ Registro de auditoria de tudo o que foi aprovado
+```
+
+### 🔄 Fluxo Bidirecional:
+1. **Você escreve no Obsidian:** Define tabelas de preços, regras de desconto e tom de voz em `01_Base_Conhecimento/`. Os agentes leem essas notas e seguem suas diretrizes.
+2. **Você aprova no Painel Web:** O sistema dispara a mensagem e atualiza a ficha do cliente em `02_Clientes_CRM/` com histórico completo e links bidirecionais.
 
 ---
 
-## 🔒 Segurança
+## 📊 Hermes BI & Relatórios Inteligentes
 
-- Agentes NÃO realizam ações externas sem aprovação
-- Dados processados localmente
-- Agente Jurídico monitora violações de LGPD automaticamente
-- API Key salva apenas no .env local (nunca vai ao GitHub)
+No topo do painel web, o botão **`📊 Relatórios com Hermes`** abre uma central analítica estilo Power BI com:
+* **Relatórios Rápidos:** Balanço Financeiro, Funil Comercial, Visão Executiva 360°, Auditoria Jurídica e Dossiê de Clientes.
+* **Consulta Livre:** Digite qualquer pergunta em linguagem natural para o Hermes cruzar os dados locais.
+* **Exportação:** Download em PDF, Excel (.xlsx) e Markdown.
 
 ---
 
-## 📄 Documentação completa
+## 📁 Estrutura do Repositório
 
-Veja [docs/PLANEJAMENTO.md](docs/PLANEJAMENTO.md) para detalhes de cada agente e arquitetura completa.
+```
+agentquest-hq/
+├── vault/                  # Cofre nativo do Obsidian (Base de conhecimento e CRM)
+├── inbox/                  # Pasta de entrada para novos arquivos (.txt, .pdf, .eml)
+├── processed/              # Arquivos brutos já processados
+├── outputs/                # Arquivos finais gerados para download
+├── backend/                # Motor em Python (FastAPI, SQLite, Hermes & Agentes)
+│   ├── agents/             # 8 Agentes especialistas em Python
+│   ├── tools/              # Leitores de arquivos e ponte do Obsidian
+│   ├── watcher.py          # Monitor de pasta inbox/
+│   └── main.py             # API local
+├── frontend/               # Painel Web em Pixel Art Isométrico
+│   ├── assets/             # Cenário do escritório moderno e ícones
+│   ├── index.html          # Interface do usuário e modal de BI
+│   ├── style.css           # Estilos e gráficos
+│   └── app.js              # Lógica dos agentes e relatórios
+├── docs/                   # Documentação detalhada e mockups aprovados
+└── requirements.txt        # Dependências Python
+```
 
+---
 
-
+## 🚀 Como Visualizar o Front-end Agora
+Abra o arquivo [`frontend/index.html`](frontend/index.html) diretamente em qualquer navegador moderno.
