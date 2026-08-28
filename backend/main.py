@@ -15,14 +15,19 @@ from sqlalchemy.orm import Session
 
 from backend.database import init_db, get_db, Mission, AgentLog, ActionHistory
 from backend.agents.hermes_bridge import hermes_orchestrator
+from backend.watcher import start_watcher_thread
 
 
-# ── Lifespan: inicializa o banco ao subir o servidor ─────────────
+# ── Lifespan: inicializa o banco e o watcher ao subir o servidor ──
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     print("[OK] Banco de dados inicializado com sucesso!")
+    observer = start_watcher_thread()
     yield
+    if observer:
+        observer.stop()
+        observer.join()
 
 
 # ── App FastAPI ──────────────────────────────────────────────────

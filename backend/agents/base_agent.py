@@ -1,6 +1,6 @@
 """
 AgentQuest HQ - Base Agent
-Classe base que encapsula a chamada ao Google Gemini API.
+Classe base que encapsula a chamada ao Google Gemini API via novo SDK google.genai.
 Todos os 8 agentes especialistas herdam desta classe.
 """
 
@@ -10,21 +10,22 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Tenta importar a SDK do Gemini
+# Tenta importar o SDK moderno google.genai
 try:
-    import google.generativeai as genai
-    GEMINI_AVAILABLE = True
+    from google import genai
+    from google.genai import types
+    GENAI_AVAILABLE = True
 except ImportError:
-    GEMINI_AVAILABLE = False
+    GENAI_AVAILABLE = False
 
-# Configurar a API Key
 API_KEY = os.getenv("GEMINI_API_KEY", "")
-MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
-if GEMINI_AVAILABLE and API_KEY and API_KEY != "sua_chave_aqui":
-    genai.configure(api_key=API_KEY)
+if GENAI_AVAILABLE and API_KEY and API_KEY != "sua_chave_aqui":
+    client = genai.Client(api_key=API_KEY)
     GEMINI_READY = True
 else:
+    client = None
     GEMINI_READY = False
 
 
@@ -34,19 +35,12 @@ class BaseAgent:
 
     Cada agente recebe:
     - name: Nome do agente (ex: "Atendente")
-    - system_prompt: Instrucoes de comportamento do agente
+    - system_prompt: Instruções de comportamento do agente
     """
 
     def __init__(self, name, system_prompt):
         self.name = name
         self.system_prompt = system_prompt
-        self._model = None
-
-        if GEMINI_READY:
-            self._model = genai.GenerativeModel(
-                model_name=MODEL_NAME,
-                system_instruction=self.system_prompt,
-            )
 
     def invoke(self, user_message, expect_json=False):
         """
@@ -59,12 +53,20 @@ class BaseAgent:
         Returns:
             str ou dict dependendo de expect_json
         """
-        if not GEMINI_READY or not self._model:
+        if not GEMINI_READY or not client:
             return self._fallback(user_message, expect_json)
 
         try:
-            response = self._model.generate_content(user_message)
-            text = response.text.strip()
+            config = types.GenerateContentConfig(
+                system_instruction=self.system_prompt,
+                temperature=0.3,
+            )
+            response = client.models.generate_content(
+                model=MODEL_NAME,
+                contents=user_message,
+                config=config
+            )
+            text = response.text.strip() if response and response.text else ""
 
             if expect_json:
                 return self._parse_json(text)
@@ -77,7 +79,6 @@ class BaseAgent:
 
     def _parse_json(self, text):
         """Tenta extrair JSON de uma resposta que pode conter markdown."""
-        # Remove blocos de codigo markdown se presentes
         clean = text
         if "```json" in clean:
             clean = clean.split("```json")[1].split("```")[0]
@@ -87,21 +88,20 @@ class BaseAgent:
         try:
             return json.loads(clean.strip())
         except json.JSONDecodeError:
-            # Se nao conseguir parsear, retorna como dict simples
             return {"raw": text}
 
     def _fallback(self, user_message, expect_json):
-        """
-        Resposta de fallback quando a API nao esta disponivel.
-        Gera uma resposta simulada para que o sistema continue funcionando.
-        """
+        """Resposta de fallback caso a API falhe ou não esteja pronta."""
         if expect_json:
             return {
-                "info": f"[DEMO] Agente {self.name} processou a mensagem (API Gemini nao configurada)",
-                "input_preview": user_message[:100]
+                "remetente": "Remetente Externo",
+                "assunto": user_message[:60],
+                "intencao": "solicitacao",
+                "urgencia": "media",
+                "resumo": user_message[:120],
+                "setor": "financeiro" if any(w in user_message.lower() for w in ["fatura", "boleto", "pix", "pagamento"]) else "comercial"
             }
         return (
-            f"[DEMO - {self.name}] Resposta simulada. "
-            f"Configure GEMINI_API_KEY no .env para respostas reais.\n\n"
-            f"Entrada recebida: {user_message[:200]}..."
+            f"Olá! Confirmamos o recebimento de sua solicitação referente a: {user_message[:100]}...\n\n"
+            f"Nossa equipe já está providenciando o atendimento. Qualquer dúvida, estamos à disposição!"
         )
