@@ -24,7 +24,7 @@ class HermesOrchestrator:
         self.planner = PlannerAgent()
         self.reviewer = ReviewerAgent()
 
-    def process_incoming_event(self, raw_text: str, source: str = "whatsapp", db=None):
+    def process_incoming_event(self, raw_text: str, source: str = "whatsapp", db=None, sender_override: str = None):
         """
         Executa o pipeline completo de 5 etapas:
         1. Atendente: Extração estruturada de intenção
@@ -49,7 +49,7 @@ class HermesOrchestrator:
 
             # ── ETAPA 2: Atendente lê a mensagem ──
             attendant_data = self.attendant.read_message(raw_text, source)
-            sender = attendant_data.get("remetente", "Remetente")
+            sender = sender_override or attendant_data.get("remetente", "Remetente")
             subject = attendant_data.get("assunto", "Demanda recebida")
             urgency = attendant_data.get("urgencia", "media")
             is_urgent = (urgency == "alta")
@@ -60,6 +60,13 @@ class HermesOrchestrator:
                 text=f"Mensagem lida de <strong>{sender}</strong>: \"{subject}\""
             ))
             db.commit()
+
+            # ── MINERAÇÃO DE MEMÓRIA & FATOS CRUZADOS (Oráculo) ──
+            try:
+                from backend.agents.memory_miner import memory_miner
+                memory_miner.mine_conversation(raw_text=raw_text, source_person=sender, source_channel=source)
+            except Exception as e:
+                print(f"[MEMORY MINER HOOK ERRO] {e}")
 
             # ── ETAPA 3: Administrativo classifica o setor ──
             routing_data = self.admin.classify(attendant_data)
@@ -154,3 +161,4 @@ class HermesOrchestrator:
 
 # Instância global compartilhada
 hermes_orchestrator = HermesOrchestrator()
+hermes_bridge = hermes_orchestrator

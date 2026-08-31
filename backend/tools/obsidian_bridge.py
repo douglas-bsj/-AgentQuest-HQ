@@ -55,6 +55,21 @@ class ObsidianBridge:
 
         return "\n\n=== BASE DE CONHECIMENTO DA EMPRESA (OBSIDIAN) ===\n" + "\n\n".join(knowledge_texts) + "\n===================================================\n"
 
+    def save_feedback_rule(self, title: str, content: str):
+        """
+        Salva uma regra de aprendizado extraída de um feedback no cofre.
+        """
+        self._ensure_folders()
+        safe_title = re.sub(r'[\\/*?:"<>|]', "", title)
+        safe_title = safe_title.replace(" ", "_")
+        filename = f"{safe_title}.md"
+        filepath = os.path.join(KNOWLEDGE_DIR, filename)
+        
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(f"# {title}\n\n")
+            f.write(f"> [!TIP] Regra Evolutiva\n> Regra extraída automaticamente após feedback do usuário.\n\n")
+            f.write(content)
+            
     def update_client_crm(self, client_name: str, channel: str, mission_title: str, response_text: str):
         """
         Cria ou atualiza a nota do cliente em vault/02_Clientes_CRM/{Nome_Cliente}.md

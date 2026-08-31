@@ -24,17 +24,25 @@
     <span id="badge-text">5 missões com respostas prontas</span>
   </div>
   
-  <div class="top-actions">
+    <!-- BOTÃO ORÁCULO & MEMÓRIA VIVA -->
+    <button class="top-btn" onclick="openOracleModal()" style="background: linear-gradient(135deg, rgba(14, 165, 233, 0.25), rgba(99, 102, 241, 0.25)); border-color: rgba(56, 189, 248, 0.5); color: #7dd3fc;" title="Perguntar ao Oráculo sobre conversas e ensinar a IA">
+      <span>🧠</span> <strong>Oráculo & Memórias</strong>
+    </button>
+
     <!-- BOTÃO SOLICITAR RELATÓRIO AO HERMES (TIPO POWER BI) -->
     <button class="top-btn" onclick="openReportModal()" style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.25), rgba(99, 102, 241, 0.25)); border-color: rgba(168, 85, 247, 0.4); color: #e9d5ff;" title="Solicitar Relatório Inteligente / BI ao Hermes">
       <span>📊</span> <strong>Relatórios com Hermes</strong>
+    </button>
+    
+    <button class="top-btn" onclick="openGlobalEditor()" style="border-color: rgba(56, 189, 248, 0.4); color: #38bdf8;" title="Abrir edição para a próxima missão da fila">
+      <span>✏️</span> <strong>Modo Edição</strong>
     </button>
     
     <button class="top-btn" onclick="addRandomMission()" title="Simular novo evento recebido">
       <span>🔄</span> Novo Evento
     </button>
     
-    <button class="top-btn" onclick="showToast('⚙️ Painel de configurações dos agentes e canais', 'info')">
+    <button class="top-btn" onclick="openSettingsModal()" title="Configurações dos agentes, canais e contas de IA">
       <span>⚙️</span>
     </button>
   </div>
@@ -66,9 +74,9 @@
         <div class="stat-val" id="metric-approved" style="color: #4ade80;">0</div>
         <div class="stat-tit">Executadas</div>
       </div>
-      <div class="stat-box">
+      <div class="stat-box clickable-stat-box" onclick="openRejectedMissionsModal()" title="Clique para ver missões rejeitadas, restaurar ou editar e aprovar">
         <div class="stat-val" id="metric-rejected" style="color: #f87171;">0</div>
-        <div class="stat-tit">Rejeitadas</div>
+        <div class="stat-tit">Rejeitadas <span style="font-size: 10px; opacity: 0.8;">↩️</span></div>
       </div>
     </div>
     <div class="feed-container">
@@ -263,8 +271,10 @@
       </div>
 
     </div>
+  </div>
+</div>
 
-  <!-- EDIT DRAFT MODAL -->
+<!-- EDIT DRAFT MODAL -->
 <div id="edit-modal-overlay" class="modal-overlay">
   <div class="modal-card edit-draft-modal" onclick="event.stopPropagation()">
     <div class="modal-header">
@@ -307,9 +317,435 @@
     </div>
   </div>
 </div>
+<!-- FEEDBACK REJECT MODAL -->
+<div id="reject-modal-overlay" class="modal-overlay">
+  <div class="modal-card edit-draft-modal" style="border-color: rgba(239, 68, 68, 0.4);" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title-row">
+        <div class="report-brand-badge" style="background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;">
+          <span>🧠</span> FEEDBACK DE APRENDIZADO
+        </div>
+        <h2 id="reject-modal-title">Por que você está rejeitando esta missão?</h2>
+        <p id="reject-modal-subtitle">O Agente vai aprender com esse feedback e criar uma regra na Base de Conhecimento para não errar novamente.</p>
+      </div>
+      <button class="modal-close-btn" onclick="closeRejectModal()">✕</button>
+    </div>
+
+    <div class="edit-modal-body">
+      <div class="edit-textarea-wrapper">
+        <textarea id="reject-modal-textarea" rows="4" placeholder="Ex: O tom de voz foi muito formal. Fale mais de forma amigável com os clientes da Loja B..."></textarea>
+      </div>
+    </div>
+
+    <div class="edit-modal-actions">
+      <button class="btn-edit-cancel" onclick="closeRejectModal()">
+        <span>Cancelar</span>
+      </button>
+      <button class="btn-edit-save" style="background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.5); color: #fca5a5;" onclick="directRejectCurrentMission()">
+        <span>❌</span> Rejeitar Direto
+      </button>
+      <button class="btn-edit-save" style="background: linear-gradient(135deg, #b91c1c, #991b1b); border-color: #f87171;" onclick="submitRejectFeedback()">
+        <span>🎓</span> Ensinar & Rejeitar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- REJECTED MISSIONS MODAL -->
+<div id="rejected-modal-overlay" class="modal-overlay">
+  <div class="modal-card rejected-modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title-row">
+        <div class="report-brand-badge" style="background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;">
+          <span>🗑️</span> HISTÓRICO DE REJEIÇÕES
+        </div>
+        <h2>Missões Rejeitadas</h2>
+        <p>Itens descartados pelo humano. Você pode restaurar qualquer missão para a fila ativa ou editá-la e aprová-la diretamente.</p>
+      </div>
+      <button class="modal-close-btn" onclick="closeRejectedMissionsModal()">✕</button>
+    </div>
+
+    <div class="rejected-modal-body">
+      <div id="rejected-missions-list" class="rejected-missions-list">
+        <!-- Renderizado dinamicamente via JS -->
+      </div>
+      <div class="empty-missions-state" id="rejected-empty-state" style="display: none; padding: 40px 20px;">
+        <div class="empty-icon">✨</div>
+        <p><strong>Nenhuma missão rejeitada!</strong><br>Todas as ações foram aprovadas ou estão na fila de triagem.</p>
+      </div>
+    </div>
+
+    <div class="edit-modal-actions">
+      <button class="btn-edit-cancel" onclick="closeRejectedMissionsModal()">
+        <span>Fechar</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- GLOBAL SETTINGS MODAL -->
+<div id="settings-modal-overlay" class="modal-overlay">
+  <div class="modal-card settings-modal-container" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title-row">
+        <div class="report-brand-badge" style="background: rgba(168, 85, 247, 0.2); border-color: rgba(168, 85, 247, 0.4); color: #e9d5ff;">
+          <span>⚙️</span> PAINEL DE CONTROLE
+        </div>
+        <h2>Configurações do AgentQuest HQ</h2>
+        <p>Configure contas de IA, parametrização dos 8 agentes, integrações de mensageria e diretórios.</p>
+      </div>
+      <button class="modal-close-btn" onclick="closeSettingsModal()">✕</button>
+    </div>
+
+    <!-- TABS NAVIGATION -->
+    <div class="settings-tabs-bar">
+      <button class="settings-tab-btn active" onclick="switchSettingsTab('ai')">
+        <span>🔑</span> Contas & Provedores IA
+      </button>
+      <button class="settings-tab-btn" onclick="switchSettingsTab('agents')">
+        <span>🤖</span> Squad de Agentes
+      </button>
+      <button class="settings-tab-btn" onclick="switchSettingsTab('channels')">
+        <span>📱</span> Canais de Mensageria
+      </button>
+      <button class="settings-tab-btn" onclick="switchSettingsTab('storage')">
+        <span>📂</span> Diretórios & Obsidian
+      </button>
+    </div>
+
+    <div class="settings-modal-body">
+      <!-- TAB 1: AI PROVIDERS -->
+      <div id="settings-tab-ai" class="settings-tab-pane active">
+        <div class="settings-section-title">
+          <span>🧠</span> Provedor de Inteligência Artificial Ativo
+        </div>
+        <div class="settings-form-group">
+          <label>Provedor Principal para Orquestração & BI:</label>
+          <select id="cfg-ai-active-provider" class="settings-select" onchange="toggleAIProviderFields()">
+            <option value="nous_openrouter">Nous Research / OpenRouter (Hermes 3 405B / 70B)</option>
+            <option value="gemini">Google Gemini (Gemini 2.5 Flash / Pro)</option>
+            <option value="openai">OpenAI (GPT-4o / GPT-4o-mini)</option>
+            <option value="local">Hermes Local Gateway (localhost:8642)</option>
+          </select>
+        </div>
+
+        <div class="settings-divider"></div>
+
+        <!-- OpenRouter / Nous Fields -->
+        <div id="cfg-field-nous" class="provider-fields-group">
+          <div class="settings-form-grid">
+            <div class="settings-form-group">
+              <label>OpenRouter API Key (sk-or-v1-...):</label>
+              <input type="password" id="cfg-nous-key" class="settings-input" placeholder="sk-or-v1-...">
+            </div>
+            <div class="settings-form-group">
+              <label>Modelo Nous / OpenRouter:</label>
+              <select id="cfg-nous-model" class="settings-select">
+                <option value="nousresearch/hermes-3-llama-3.1-405b">nousresearch/hermes-3-llama-3.1-405b (Mais Inteligente)</option>
+                <option value="nousresearch/hermes-3-llama-3.1-70b">nousresearch/hermes-3-llama-3.1-70b (Rápido & Econômico)</option>
+                <option value="meta-llama/llama-3.3-70b-instruct">meta-llama/llama-3.3-70b-instruct</option>
+                <option value="deepseek/deepseek-r1">deepseek/deepseek-r1 (Raciocínio)</option>
+              </select>
+            </div>
+            <div class="settings-form-group" style="grid-column: 1 / -1;">
+              <label>Base URL do Provedor:</label>
+              <input type="text" id="cfg-nous-base-url" class="settings-input" value="https://openrouter.ai/api/v1">
+            </div>
+          </div>
+        </div>
+
+        <!-- Gemini Fields -->
+        <div id="cfg-field-gemini" class="provider-fields-group" style="display: none;">
+          <div class="settings-form-grid">
+            <div class="settings-form-group">
+              <label>Google Gemini API Key:</label>
+              <input type="password" id="cfg-gemini-key" class="settings-input" placeholder="AIzaSy...">
+            </div>
+            <div class="settings-form-group">
+              <label>Modelo Gemini:</label>
+              <select id="cfg-gemini-model" class="settings-select">
+                <option value="gemini-2.5-flash">gemini-2.5-flash (Ultra Rápido)</option>
+                <option value="gemini-2.5-pro">gemini-2.5-pro (Avançado)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- OpenAI Fields -->
+        <div id="cfg-field-openai" class="provider-fields-group" style="display: none;">
+          <div class="settings-form-grid">
+            <div class="settings-form-group">
+              <label>OpenAI API Key (sk-...):</label>
+              <input type="password" id="cfg-openai-key" class="settings-input" placeholder="sk-...">
+            </div>
+            <div class="settings-form-group">
+              <label>Modelo OpenAI:</label>
+              <select id="cfg-openai-model" class="settings-select">
+                <option value="gpt-4o-mini">gpt-4o-mini (Econômico)</option>
+                <option value="gpt-4o">gpt-4o (Completo)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Local Hermes Fields -->
+        <div id="cfg-field-local" class="provider-fields-group" style="display: none;">
+          <div class="settings-form-grid">
+            <div class="settings-form-group">
+              <label>Local Endpoint URL:</label>
+              <input type="text" id="cfg-local-url" class="settings-input" value="http://127.0.0.1:8642/v1">
+            </div>
+            <div class="settings-form-group">
+              <label>Chave de Acesso Local:</label>
+              <input type="text" id="cfg-local-key" class="settings-input" value="agentquest-local-key">
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-test-row">
+          <button type="button" class="btn-test-ai" onclick="testCurrentAIConnection()">
+            <span>⚡</span> Testar Conexão com Provedor Selecionado
+          </button>
+          <span id="cfg-test-status" class="test-status-msg"></span>
+        </div>
+      </div>
+
+      <!-- TAB 2: AGENTS SQUAD -->
+      <div id="settings-tab-agents" class="settings-tab-pane">
+        <div class="settings-section-title">
+          <span>🤖</span> Gestão de Autonomia e Tom de Voz dos Agentes
+        </div>
+        <p class="settings-help-text">Configure se cada agente exige aprovação humana para despachar ou se possui autonomia parcial, além do seu tom de voz.</p>
+        
+        <div id="cfg-agents-list" class="cfg-agents-grid">
+          <!-- Renderizado dinamicamente via JS com os 8 agentes -->
+        </div>
+      </div>
+
+      <!-- TAB 3: CHANNELS -->
+      <div id="settings-tab-channels" class="settings-tab-pane">
+        <div class="settings-section-title">
+          <span>💬</span> WhatsApp (API de Mensageria)
+        </div>
+        <div class="settings-form-grid">
+          <div class="settings-form-group">
+            <label>Tipo de Conexão WhatsApp:</label>
+            <select id="cfg-wa-provider" class="settings-select">
+              <option value="evolution">Evolution API (Recomendado)</option>
+              <option value="zapi">Z-API</option>
+              <option value="twilio">Twilio WhatsApp Business</option>
+              <option value="mock">Modo Simulado / Link Direto (wa.me)</option>
+            </select>
+          </div>
+          <div class="settings-form-group">
+            <label>URL da API / Host:</label>
+            <input type="text" id="cfg-wa-url" class="settings-input" placeholder="http://localhost:8080 ou https://api.z-api.io">
+          </div>
+          <div class="settings-form-group">
+            <label>Nome da Instância:</label>
+            <input type="text" id="cfg-wa-instance" class="settings-input" placeholder="agentquest">
+          </div>
+          <div class="settings-form-group">
+            <label>Token / API Key da Instância:</label>
+            <input type="password" id="cfg-wa-token" class="settings-input" placeholder="Token secreto do WhatsApp">
+          </div>
+          <div class="settings-form-group" style="grid-column: 1 / -1;">
+            <label>Webhook de Entrada (Copie e cole no painel do seu WhatsApp):</label>
+            <input type="text" id="cfg-wa-webhook" class="settings-input" readonly value="http://127.0.0.1:8000/api/webhook/whatsapp" style="background: rgba(0,0,0,0.3); color: #38bdf8;">
+          </div>
+        </div>
+
+        <div class="settings-divider"></div>
+
+        <div class="settings-section-title">
+          <span>📧</span> Conexão de E-mail (Receber e Enviar Mensagens)
+        </div>
+        <p class="settings-help-text">Conecte sua conta de e-mail (Gmail, Outlook ou domínio próprio) para leitura automática da caixa de entrada e respostas com 1 clique.</p>
+
+        <div class="settings-form-grid">
+          <div class="settings-form-group">
+            <label>Seu E-mail:</label>
+            <input type="email" id="cfg-email-user" class="settings-input" placeholder="seu-email@gmail.com">
+          </div>
+          <div class="settings-form-group">
+            <label>Senha de Aplicativo (App Password / Senha):</label>
+            <input type="password" id="cfg-email-pass" class="settings-input" placeholder="••••••••••••••••">
+          </div>
+          <div class="settings-form-group">
+            <label>Servidor de Entrada IMAP (Ler E-mails):</label>
+            <input type="text" id="cfg-email-imap" class="settings-input" placeholder="imap.gmail.com:993">
+          </div>
+          <div class="settings-form-group">
+            <label>Servidor de Saída SMTP (Enviar E-mails):</label>
+            <input type="text" id="cfg-email-smtp" class="settings-input" placeholder="smtp.gmail.com:587">
+          </div>
+        </div>
+
+        <div class="settings-divider"></div>
+
+        <div class="settings-section-title">
+          <span>✈️</span> Telegram Bot API (Opcional)
+        </div>
+        <div class="settings-form-grid">
+          <div class="settings-form-group">
+            <label>Telegram Bot Token:</label>
+            <input type="password" id="cfg-tg-token" class="settings-input" placeholder="123456789:ABCdef...">
+          </div>
+          <div class="settings-form-group">
+            <label>Telegram Chat ID Padrão:</label>
+            <input type="text" id="cfg-tg-chat" class="settings-input" placeholder="-100123456789">
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: STORAGE & OBSIDIAN -->
+      <div id="settings-tab-storage" class="settings-tab-pane">
+        <div class="settings-section-title">
+          <span>📂</span> Pastas Locais & Cofre Obsidian
+        </div>
+        <div class="settings-form-grid">
+          <div class="settings-form-group">
+            <label>Pasta de Entrada (Inbox de arquivos/mensagens):</label>
+            <input type="text" id="cfg-dir-inbox" class="settings-input" value="inbox">
+          </div>
+          <div class="settings-form-group">
+            <label>Pasta de Processados:</label>
+            <input type="text" id="cfg-dir-processed" class="settings-input" value="processed">
+          </div>
+          <div class="settings-form-group">
+            <label>Pasta de Saídas / Disparos (.txt, .pdf, .xlsx):</label>
+            <input type="text" id="cfg-dir-outputs" class="settings-input" value="outputs">
+          </div>
+          <div class="settings-form-group">
+            <label>Cofre Obsidian (Base de Conhecimento, CRM, BI):</label>
+            <input type="text" id="cfg-dir-vault" class="settings-input" value="vault">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FOOTER ACTIONS -->
+    <div class="settings-modal-footer">
+      <button type="button" class="btn-edit-cancel" onclick="closeSettingsModal()">
+        <span>❌</span> Cancelar
+      </button>
+      <button type="button" class="btn-save-settings" onclick="saveAllSettings()">
+        <span>💾</span> Salvar Todas as Configurações
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ORACLE & LIVE MEMORY MODAL -->
+<div id="oracle-modal-overlay" class="modal-overlay">
+  <div class="modal-card oracle-modal-container" onclick="event.stopPropagation()">
+    <div class="modal-header" style="border-bottom: 1px solid rgba(56, 189, 248, 0.2); background: rgba(14, 165, 233, 0.08);">
+      <div class="modal-title-row">
+        <div class="report-brand-badge" style="background: rgba(14, 165, 233, 0.2); border-color: rgba(56, 189, 248, 0.4); color: #7dd3fc;">
+          <span>🧠</span> MEMÓRIA VIVA & APRENDIZADO ATIVO
+        </div>
+        <h2>Oráculo do Conhecimento</h2>
+        <p>Pergunte qualquer coisa sobre as conversas registradas ou ensine novos termos para a IA.</p>
+      </div>
+      <button class="modal-close-btn" onclick="closeOracleModal()">✕</button>
+    </div>
+
+    <!-- TABS BAR -->
+    <div class="oracle-tabs-bar">
+      <button class="oracle-tab-btn active" onclick="switchOracleTab('chat')">
+        <span>💬</span> Chat com o Oráculo
+      </button>
+      <button class="oracle-tab-btn" onclick="switchOracleTab('gaps')">
+        <span>🎓</span> Dúvidas da IA <span id="oracle-gaps-badge" class="gaps-count-badge">0</span>
+      </button>
+      <button class="oracle-tab-btn" onclick="switchOracleTab('facts')">
+        <span>🗂️</span> Fatos Minerados
+      </button>
+      <button class="oracle-tab-btn" onclick="switchOracleTab('feed-custom')">
+        <span>📥</span> Minerar Texto / Conversa
+      </button>
+    </div>
+
+    <div class="oracle-modal-content">
+      <!-- TAB 1: CHAT -->
+      <div id="oracle-tab-chat" class="oracle-tab-pane active">
+        <div class="oracle-chat-layout">
+          <div class="oracle-messages-box" id="oracle-messages-list">
+            <div class="oracle-msg-bubble oracle">
+              <div class="oracle-msg-header">🤖 Oráculo</div>
+              <div class="oracle-msg-text">
+                Olá! Eu leio e cruzo as informações de todas as conversas do WhatsApp, Telegram e E-mails.<br>
+                O que você gostaria de saber? (Ex: <em>"Onde estão os cartões de futebol?"</em> ou <em>"O que o cliente João Silva combinou sobre prazos?"</em>)
+              </div>
+            </div>
+          </div>
+          
+          <div class="oracle-input-bar">
+            <input type="text" id="oracle-input-text" placeholder="Pergunte sobre qualquer conversa ou acontecimento..." onkeypress="handleOracleKeyPress(event)">
+            <button class="btn-oracle-send" onclick="sendOracleMessage()">
+              <span>Enviar ➔</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: GAPS (ACTIVE LEARNING) -->
+      <div id="oracle-tab-gaps" class="oracle-tab-pane">
+        <div class="gaps-header-info">
+          <h3>🎓 Termos & Jargões que a IA quer aprender com você</h3>
+          <p>Quando a IA lê conversas com palavras desconhecidas ou jargões da sua empresa, ela lista aqui para você ensinar com 1 clique.</p>
+        </div>
+        <div id="oracle-gaps-list" class="gaps-cards-grid">
+          <!-- Renderizado via JS -->
+        </div>
+      </div>
+
+      <!-- TAB 3: MINED FACTS -->
+      <div id="oracle-tab-facts" class="oracle-tab-pane">
+        <div class="facts-header-info">
+          <h3>🗂️ Fatos & Associações Mineradas Automaticamente</h3>
+          <p>Fatos estruturados extraídos em tempo real das mensagens e salvos na memória.</p>
+        </div>
+        <div id="oracle-facts-list" class="facts-cards-grid">
+          <!-- Renderizado via JS -->
+        </div>
+      </div>
+
+      <!-- TAB 4: MINE CUSTOM TEXT -->
+      <div id="oracle-tab-feed-custom" class="oracle-tab-pane">
+        <div class="mine-box-container">
+          <h3>📥 Minerar Conversa Manualmente</h3>
+          <p>Cole uma conversa ou anotação para o Agente Minerador extrair fatos imediatamente:</p>
+          <div class="settings-form-grid" style="margin-bottom: 12px;">
+            <div class="settings-form-group">
+              <label>Nome do Contato / Remetente:</label>
+              <input type="text" id="mine-input-person" class="settings-input" placeholder="Ex: Carlos, João, Cliente X">
+            </div>
+            <div class="settings-form-group">
+              <label>Canal de Origem:</label>
+              <select id="mine-input-channel" class="settings-select">
+                <option value="whatsapp">💬 WhatsApp</option>
+                <option value="telegram">✈️ Telegram</option>
+                <option value="email">📧 E-mail</option>
+                <option value="reuniao">🎙️ Reunião / Anotação</option>
+              </select>
+            </div>
+          </div>
+          <div class="edit-textarea-wrapper">
+            <textarea id="mine-input-text" rows="5" placeholder="Ex: Ontem no futebol falei com o Carlos que deixei os cartões na casa dele..."></textarea>
+          </div>
+          <div style="margin-top: 14px; text-align: right;">
+            <button class="btn-save-settings" onclick="submitCustomMining()">
+              <span>⚡</span> Minerar e Salvar na Memória
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div id="toasts"></div>
-
 <script src="app.js"></script>
 </body>
 </html>

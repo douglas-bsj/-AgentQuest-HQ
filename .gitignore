@@ -11,6 +11,9 @@ env/
 *.db
 *.sqlite3
 
+# Configurações do sistema (pode conter chaves de API)
+settings.json
+
 # Pastas de dados (não subir arquivos pessoais)
 inbox/*
 processed/*
@@ -24,6 +27,11 @@ outputs/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Binários / Instaladores pesados
+*.exe
+qrcode_whatsapp.png
+vault/.obsidian/
 
 # IDE
 .vscode/

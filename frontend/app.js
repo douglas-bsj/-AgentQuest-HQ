@@ -51,6 +51,34 @@ const API = {
     });
     return r.json();
   },
+  async getRejectedMissions() {
+    const r = await fetch(API_BASE + '/api/missions?status=rejected');
+    return r.json();
+  },
+  async restoreMission(id) {
+    const r = await fetch(API_BASE + '/api/missions/' + id + '/restore', { method: 'POST' });
+    return r.json();
+  },
+  async getSettings() {
+    const r = await fetch(API_BASE + '/api/settings');
+    return r.json();
+  },
+  async saveSettings(settings) {
+    const r = await fetch(API_BASE + '/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings)
+    });
+    return r.json();
+  },
+  async testAI(data) {
+    const r = await fetch(API_BASE + '/api/settings/test-ai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return r.json();
+  },
   async generateReport(type, query) {
     const q = query ? '&query=' + encodeURIComponent(query) : '';
     const r = await fetch(API_BASE + '/api/reports/generate?type=' + type + q);
@@ -61,12 +89,12 @@ const API = {
 // ── SQUAD DE 8 AGENTES ──────────────────────────────────────────
 const SQUAD_AGENTS = [
   { id: 'hermes',      name: 'Hermes',         role: 'Orquestrador Geral',   icon: '👑', color: '#a855f7', status: 'ativo' },
-  { id: 'atendente',   name: 'Atendente',      role: 'Recepção & Leitura',   icon: '📖', color: '#3b82f6', status: 'processando' },
+  { id: 'atendente',   name: 'Atendente',      role: 'Recepção & Leitura',   icon: '📖', color: '#3b82f6', status: 'ativo' },
   { id: 'admin',       name: 'Administrativo', role: 'Triagem & Roteamento', icon: '🔍', color: '#f97316', status: 'ativo' },
-  { id: 'financeiro',  name: 'Financeiro',     role: 'Cobranças & Notas',    icon: '💰', color: '#eab308', status: 'ocioso' },
-  { id: 'comercial',   name: 'Comercial',      role: 'Leads & Follow-ups',   icon: '📈', color: '#ef4444', status: 'processando' },
+  { id: 'financeiro',  name: 'Financeiro',     role: 'Cobranças & Notas',    icon: '💰', color: '#eab308', status: 'ativo' },
+  { id: 'comercial',   name: 'Comercial',      role: 'Leads & Follow-ups',   icon: '📈', color: '#ef4444', status: 'ativo' },
   { id: 'juridico',    name: 'Jurídico LGPD',  role: 'Contratos & LGPD',     icon: '⚖️', color: '#6b7280', status: 'ativo' },
-  { id: 'planejador',  name: 'Planejador',     role: 'Estratégia & Prazos',  icon: '🗺️', color: '#14b8a6', status: 'ocioso' },
+  { id: 'planejador',  name: 'Planejador',     role: 'Estratégia & Prazos',  icon: '🗺️', color: '#14b8a6', status: 'ativo' },
   { id: 'revisor',     name: 'Revisor',        role: 'Controle de Qualidade',icon: '✅', color: '#22c55e', status: 'ativo' }
 ];
 
@@ -298,13 +326,12 @@ function addMissionCardWithId(serverId, data) {
           '<div class="draft-header-label"><span>⚡</span> Resposta pronta para execução pós-aprovação:</div>' +
           '<div class="draft-body-text" id="draft-text-' + id + '">' + data.response + '</div>' +
           '<div class="draft-dispatch-channel"><span>🚀</span> ' + data.channel + '</div>' +
-          '<button class="draft-edit-action" onclick="openEditDraftModal(' + id + ')">✏️ Editar texto da resposta no modal</button>' +
         '</div>' +
       '</div>' +
       '<div class="mission-buttons-row">' +
         '<button class="btn-action btn-approve-exec" onclick="handleApproveMission(' + id + ')" title="Aprova e executa a resposta imediatamente"><span>✅</span> Aprovar</button>' +
         '<button class="btn-action btn-edit-inline" onclick="openEditDraftModal(' + id + ')" title="Editar o texto da resposta antes do envio"><span>✏️</span> Editar</button>' +
-        '<button class="btn-action btn-reject-task" onclick="handleRejectMission(' + id + ')" title="Descarta a ação sugerida"><span>❌</span> Rejeitar</button>' +
+        '<button class="btn-action btn-reject-task" onclick="openRejectModal(' + id + ')" title="Rejeita a ação e dá feedback de aprendizado"><span>❌</span> Rejeitar</button>' +
       '</div>' +
     '</div>';
 
@@ -402,13 +429,12 @@ function addMissionCard(data) {
           '<div class="draft-header-label"><span>⚡</span> Resposta pronta para execução pós-aprovação:</div>' +
           '<div class="draft-body-text" id="draft-text-' + id + '">' + data.response + '</div>' +
           '<div class="draft-dispatch-channel"><span>🚀</span> ' + data.channel + '</div>' +
-          '<button class="draft-edit-action" onclick="openEditDraftModal(' + id + ')">✏️ Editar texto da resposta no modal</button>' +
         '</div>' +
       '</div>' +
       '<div class="mission-buttons-row">' +
         '<button class="btn-action btn-approve-exec" onclick="handleApproveMission(' + id + ')" title="Aprova e executa a resposta imediatamente"><span>✅</span> Aprovar</button>' +
         '<button class="btn-action btn-edit-inline" onclick="openEditDraftModal(' + id + ')" title="Editar o texto da resposta antes do envio"><span>✏️</span> Editar</button>' +
-        '<button class="btn-action btn-reject-task" onclick="handleRejectMission(' + id + ')" title="Descarta a ação sugerida"><span>❌</span> Rejeitar</button>' +
+        '<button class="btn-action btn-reject-task" onclick="openRejectModal(' + id + ')" title="Rejeita a ação e dá feedback de aprendizado"><span>❌</span> Rejeitar</button>' +
       '</div>' +
     '</div>';
 
@@ -424,6 +450,16 @@ function toggleDraftAccordion(btn) {
 
 // ── EDIT DRAFT MODAL STATE & HANDLERS ──
 let currentEditingMissionId = null;
+
+function openGlobalEditor() {
+  const firstMission = document.querySelector('#missions-list .card-mission');
+  if (firstMission) {
+    const id = firstMission.id.replace('mission-card-', '');
+    openEditDraftModal(id);
+  } else {
+    showToast('🎉 Nenhuma missão pendente para edição no momento!', 'success');
+  }
+}
 
 function openEditDraftModal(id) {
   const textEl = document.getElementById('draft-text-' + id);
@@ -570,6 +606,98 @@ function handleRejectMission(id) {
   }, 480);
 }
 
+// ── REJECT MODAL STATE & HANDLERS ──
+let currentRejectingMissionId = null;
+
+function openRejectModal(id) {
+  currentRejectingMissionId = id;
+  const overlay = document.getElementById('reject-modal-overlay');
+  if (overlay) {
+    overlay.classList.add('active');
+    const txt = document.getElementById('reject-modal-textarea');
+    if (txt) {
+      txt.value = '';
+      setTimeout(() => txt.focus(), 100);
+    }
+  }
+}
+
+function closeRejectModal() {
+  currentRejectingMissionId = null;
+  const overlay = document.getElementById('reject-modal-overlay');
+  if (overlay) {
+    overlay.classList.remove('active');
+  }
+}
+
+function directRejectCurrentMission() {
+  if (!currentRejectingMissionId) return;
+  const id = currentRejectingMissionId;
+  closeRejectModal();
+  handleRejectMission(id);
+}
+
+function submitRejectFeedback() {
+  if (!currentRejectingMissionId) return;
+  const id = currentRejectingMissionId;
+  const feedback = document.getElementById('reject-modal-textarea').value.trim();
+  
+  if (!feedback) {
+    directRejectCurrentMission();
+    return;
+  }
+  
+  closeRejectModal();
+  
+  var card = document.getElementById('mission-card-' + id);
+  if (card) {
+    card.classList.add('rejecting');
+  }
+  
+  countRejected++;
+  var mRej = document.getElementById('metric-rejected');
+  if (mRej) mRej.textContent = countRejected;
+  
+  showToast('🧠 Feedback enviado! O Agente está processando a nova regra...', 'info');
+  
+  if (isOnline) {
+    fetch(API_BASE + '/api/missions/' + id + '/reject_with_feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feedback: feedback })
+    })
+    .then(r => r.json())
+    .then(data => {
+      showToast('✅ ' + (data.message || 'Missão rejeitada com aprendizado.'), 'success');
+      appendFeedItem({
+        color: '#ef4444',
+        agent: 'Sistema',
+        text: 'Nova regra de aprendizado criada com sucesso após rejeição da missão <strong>#' + id + '</strong>.'
+      });
+      if (card) {
+        card.remove();
+        refreshCounters();
+      }
+    })
+    .catch(e => {
+      console.error(e);
+      showToast('⚠️ Missão arquivada (erro ao gerar regra de feedback).', 'info');
+      if (card) {
+        card.remove();
+        refreshCounters();
+      }
+    });
+  } else {
+    setTimeout(() => {
+      showToast('❌ Missão rejeitada e arquivada.', 'error');
+      if (card) {
+        card.remove();
+        refreshCounters();
+      }
+    }, 480);
+  }
+}
+
 function refreshCounters() {
   const total = document.querySelectorAll('.card-mission').length;
   document.getElementById('metric-pending').textContent = total;
@@ -635,14 +763,56 @@ async function addRandomMission() {
   }
 }
 
+let lastFeedId = 0;
+
 function startFeedLoop() {
-  appendFeedItem(AGENT_ACTIVITY_LOGS[logCursor % AGENT_ACTIVITY_LOGS.length]);
-  logCursor++;
-  
-  setInterval(() => {
-    appendFeedItem(AGENT_ACTIVITY_LOGS[logCursor % AGENT_ACTIVITY_LOGS.length]);
-    logCursor++;
-  }, 3800);
+  // Quando estiver conectado à API, consulta os logs reais do servidor a cada 3 segundos
+  setInterval(async () => {
+    if (!isOnline) return;
+    try {
+      // 1. Atualiza Feed em tempo real
+      const feed = await API.getFeed();
+      if (feed && feed.length > 0) {
+        const feedList = document.getElementById('feed-list');
+        const existingIds = new Set(Array.from(feedList.querySelectorAll('.feed-item')).map(el => el.dataset.logId));
+        
+        feed.slice(0, 10).reverse().forEach(item => {
+          if (!existingIds.has(String(item.id))) {
+            appendFeedItem({
+              id: item.id,
+              color: item.color,
+              agent: item.agent_name,
+              text: item.text
+            });
+          }
+        });
+      }
+
+      // 2. Atualiza Missões em tempo real
+      const missions = await API.getMissions();
+      const currentCards = document.querySelectorAll('#missions-list .card-mission');
+      const currentIds = new Set(Array.from(currentCards).map(c => parseInt(c.id.replace('mission-card-', ''))));
+      
+      missions.forEach(m => {
+        if (!currentIds.has(m.id)) {
+          addMissionCardFromAPI(m);
+        }
+      });
+
+      // 3. Atualiza Stats
+      const stats = await API.getStats();
+      countApproved = stats.approved || 0;
+      countRejected = stats.rejected || 0;
+      const mAppr = document.getElementById('metric-approved');
+      const mRej = document.getElementById('metric-rejected');
+      if (mAppr) mAppr.textContent = countApproved;
+      if (mRej) mRej.textContent = countRejected;
+      refreshCounters();
+
+    } catch (e) {
+      console.warn('Erro na sincronização em tempo real:', e);
+    }
+  }, 3000);
 }
 
 function appendFeedItem(item) {
@@ -651,11 +821,12 @@ function appendFeedItem(item) {
   
   const el = document.createElement('div');
   el.className = 'feed-item';
+  if (item.id) el.dataset.logId = item.id;
   el.style.borderLeftColor = item.color;
   el.innerHTML = 
     '<div class="feed-dot" style="background: ' + item.color + ';"></div>' +
     '<div class="feed-content">' +
-      '<strong style="color: ' + item.color + ';">' + item.agent + '</strong> — ' + item.text +
+      '<strong style="color: ' + item.color + ';">' + (item.agent || item.agent_name || 'Agente') + '</strong> — ' + item.text +
     '</div>' +
     '<div class="feed-time">' + timeStr + '</div>';
   
@@ -1034,6 +1205,395 @@ function renderReportView(data) {
   document.getElementById('hermes-synthesis-text').innerHTML = data.synthesis;
 }
 
+// ── REJECTED MISSIONS MODAL HANDLERS ──
+let rejectedMissionsCache = [];
+
+async function openRejectedMissionsModal() {
+  const overlay = document.getElementById('rejected-modal-overlay');
+  if (overlay) overlay.classList.add('active');
+  const listEl = document.getElementById('rejected-missions-list');
+  const emptyEl = document.getElementById('rejected-empty-state');
+  listEl.innerHTML = '<div style="color: #94a3b8; padding: 20px; text-align: center;">Carregando histórico de rejeitadas...</div>';
+  emptyEl.style.display = 'none';
+
+  if (isOnline) {
+    try {
+      const missions = await API.getRejectedMissions();
+      rejectedMissionsCache = missions;
+      renderRejectedMissions(missions);
+    } catch (e) {
+      console.error(e);
+      listEl.innerHTML = '<div style="color: #f87171; padding: 20px; text-align: center;">Erro ao carregar missões rejeitadas.</div>';
+    }
+  } else {
+    // Offline simulated
+    renderRejectedMissions(rejectedMissionsCache);
+  }
+}
+
+function closeRejectedMissionsModal() {
+  const overlay = document.getElementById('rejected-modal-overlay');
+  if (overlay) overlay.classList.remove('active');
+}
+
+function renderRejectedMissions(missions) {
+  const listEl = document.getElementById('rejected-missions-list');
+  const emptyEl = document.getElementById('rejected-empty-state');
+
+  if (!missions || missions.length === 0) {
+    listEl.innerHTML = '';
+    emptyEl.style.display = 'block';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  listEl.innerHTML = missions.map(m => {
+    const sourceLabel = m.source === 'whatsapp' ? '💬 WhatsApp' : m.source === 'telegram' ? '✈️ Telegram' : '📧 E-mail';
+    return `
+      <div class="rejected-mission-card" id="rejected-card-${m.id}">
+        <div class="rejected-card-header">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="info-tag" style="background: rgba(239, 68, 68, 0.15); color: #fca5a5;">Missão #${m.id}</span>
+            <span class="info-tag">${sourceLabel}</span>
+            <span class="info-tag">🤖 ${m.agent}</span>
+          </div>
+          <span style="font-size: 10px; color: #64748b;">${m.deadline || 'Sem prazo'}</span>
+        </div>
+        <div class="rejected-card-title">${m.title}</div>
+        <div class="rejected-card-body" id="rejected-text-${m.id}">${m.response}</div>
+        <div class="rejected-card-actions">
+          <button class="btn-restore-mission" onclick="handleRestoreMission(${m.id})" title="Devolve esta missão para a fila ativa de aprovação">
+            <span>🔄</span> Restaurar para a Fila
+          </button>
+          <button class="btn-edit-approve-rejected" onclick="handleEditAndApproveRejected(${m.id})" title="Edita o texto e aprova imediatamente">
+            <span>✏️</span> Editar & Aprovar
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function handleRestoreMission(id) {
+  if (isOnline) {
+    try {
+      const restored = await API.restoreMission(id);
+      showToast('🔄 Missão #' + id + ' restaurada com sucesso para a fila!', 'success');
+      appendFeedItem({
+        color: '#38bdf8',
+        agent: 'Você (Humano)',
+        text: 'Restaurou a missão <strong>#' + id + '</strong> de volta para a fila de aprovação.'
+      });
+      // Remove from rejected modal UI
+      const card = document.getElementById('rejected-card-' + id);
+      if (card) card.remove();
+      
+      // Update rejected counter
+      countRejected = Math.max(0, countRejected - 1);
+      const mRej = document.getElementById('metric-rejected');
+      if (mRej) mRej.textContent = countRejected;
+      
+      // Re-add to main pending list
+      addMissionCard(restored);
+      refreshCounters();
+      
+      // Check if rejected list empty
+      const remaining = document.querySelectorAll('.rejected-mission-card').length;
+      if (remaining === 0) {
+        document.getElementById('rejected-empty-state').style.display = 'block';
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('⚠️ Erro ao restaurar missão.', 'error');
+    }
+  } else {
+    showToast('🔄 [DEMO] Missão restaurada para a fila', 'success');
+  }
+}
+
+function handleEditAndApproveRejected(id) {
+  closeRejectedMissionsModal();
+  // Open edit modal directly for this mission
+  openEditDraftModal(id);
+}
+
+// ── GLOBAL SETTINGS STATE & HANDLERS ──
+let globalSettings = null;
+
+function openSettingsModal() {
+  const overlay = document.getElementById('settings-modal-overlay');
+  if (overlay) overlay.classList.add('active');
+  loadSettings();
+}
+
+function closeSettingsModal() {
+  const overlay = document.getElementById('settings-modal-overlay');
+  if (overlay) overlay.classList.remove('active');
+}
+
+function switchSettingsTab(tabName) {
+  document.querySelectorAll('.settings-tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.settings-tab-pane').forEach(pane => pane.classList.remove('active'));
+
+  const activeBtn = Array.from(document.querySelectorAll('.settings-tab-btn')).find(b => b.getAttribute('onclick') && b.getAttribute('onclick').includes(tabName));
+  if (activeBtn) activeBtn.classList.add('active');
+
+  const pane = document.getElementById('settings-tab-' + tabName);
+  if (pane) pane.classList.add('active');
+}
+
+function toggleAIProviderFields() {
+  const provider = document.getElementById('cfg-ai-active-provider').value;
+  document.getElementById('cfg-field-nous').style.display = (provider === 'nous_openrouter') ? 'block' : 'none';
+  document.getElementById('cfg-field-gemini').style.display = (provider === 'gemini') ? 'block' : 'none';
+  document.getElementById('cfg-field-openai').style.display = (provider === 'openai') ? 'block' : 'none';
+  document.getElementById('cfg-field-local').style.display = (provider === 'local') ? 'block' : 'none';
+}
+
+async function loadSettings() {
+  let settings = null;
+  if (isOnline) {
+    try {
+      settings = await API.getSettings();
+    } catch (e) {
+      console.warn('Falha ao carregar settings do backend, usando localStorage:', e);
+    }
+  }
+  
+  if (!settings) {
+    const cached = localStorage.getItem('agentquest_settings');
+    if (cached) {
+      try { settings = JSON.parse(cached); } catch(e){}
+    }
+  }
+
+  if (settings) {
+    globalSettings = settings;
+    populateSettingsForm(settings);
+  }
+}
+
+function populateSettingsForm(s) {
+  // Tab 1: AI
+  if (s.ai_providers) {
+    const ai = s.ai_providers;
+    if (ai.active_provider) document.getElementById('cfg-ai-active-provider').value = ai.active_provider;
+    if (ai.nous_api_key) document.getElementById('cfg-nous-key').value = ai.nous_api_key;
+    if (ai.nous_model_name) document.getElementById('cfg-nous-model').value = ai.nous_model_name;
+    if (ai.nous_base_url) document.getElementById('cfg-nous-base-url').value = ai.nous_base_url;
+    if (ai.gemini_api_key) document.getElementById('cfg-gemini-key').value = ai.gemini_api_key;
+    if (ai.gemini_model) document.getElementById('cfg-gemini-model').value = ai.gemini_model;
+    if (ai.openai_api_key) document.getElementById('cfg-openai-key').value = ai.openai_api_key;
+    if (ai.openai_model) document.getElementById('cfg-openai-model').value = ai.openai_model;
+    if (ai.local_base_url) document.getElementById('cfg-local-url').value = ai.local_base_url;
+    if (ai.local_api_key) document.getElementById('cfg-local-key').value = ai.local_api_key;
+    toggleAIProviderFields();
+  }
+
+  // Tab 2: Agents
+  const agentsContainer = document.getElementById('cfg-agents-list');
+  const squad = s.agents || SQUAD_AGENTS;
+  agentsContainer.innerHTML = squad.map(a => `
+    <div class="cfg-agent-card" id="cfg-agent-${a.id}">
+      <div class="cfg-agent-header">
+        <span style="font-size: 20px;">${a.icon || '🤖'}</span>
+        <div>
+          <div class="cfg-agent-title">${a.name}</div>
+          <div class="cfg-agent-role">${a.role}</div>
+        </div>
+      </div>
+      <div class="cfg-agent-row">
+        <div class="settings-form-group">
+          <label>Status Operacional:</label>
+          <select class="settings-select cfg-agent-status" data-agent="${a.id}">
+            <option value="ativo" ${a.status === 'ativo' ? 'selected' : ''}>🟢 Ativo</option>
+            <option value="ocioso" ${a.status === 'ocioso' ? 'selected' : ''}>🔵 Ocioso</option>
+            <option value="pausado" ${a.status === 'pausado' ? 'selected' : ''}>⏸️ Pausado</option>
+          </select>
+        </div>
+        <div class="settings-form-group">
+          <label>Nível de Autonomia:</label>
+          <select class="settings-select cfg-agent-autonomy" data-agent="${a.id}">
+            <option value="manual" ${(a.autonomy || 'manual') === 'manual' ? 'selected' : ''}>🛡️ Exigir Aprovação</option>
+            <option value="auto" ${a.autonomy === 'auto' ? 'selected' : ''}>⚡ Auto-Executar</option>
+          </select>
+        </div>
+      </div>
+      <div class="settings-form-group">
+        <label>Tom de Voz:</label>
+        <input type="text" class="settings-input cfg-agent-tone" data-agent="${a.id}" value="${a.tone || 'Padrão Profissional'}">
+      </div>
+    </div>
+  `).join('');
+
+  // Tab 3: Channels
+  if (s.channels) {
+    if (s.channels.whatsapp) {
+      const wa = s.channels.whatsapp;
+      if (wa.provider) document.getElementById('cfg-wa-provider').value = wa.provider;
+      if (wa.api_url) document.getElementById('cfg-wa-url').value = wa.api_url;
+      if (wa.instance_name) document.getElementById('cfg-wa-instance').value = wa.instance_name;
+      if (wa.api_token) document.getElementById('cfg-wa-token').value = wa.api_token;
+      if (wa.webhook_url) document.getElementById('cfg-wa-webhook').value = wa.webhook_url;
+    }
+    if (s.channels.telegram) {
+      const tg = s.channels.telegram;
+      if (tg.bot_token) document.getElementById('cfg-tg-token').value = tg.bot_token;
+      if (tg.default_chat_id) document.getElementById('cfg-tg-chat').value = tg.default_chat_id;
+    }
+    if (s.channels.email) {
+      const em = s.channels.email;
+      if (em.email_user) document.getElementById('cfg-email-user').value = em.email_user;
+      if (em.email_password) document.getElementById('cfg-email-pass').value = em.email_password;
+      if (em.imap_host) document.getElementById('cfg-email-imap').value = em.imap_host + (em.imap_port ? ':' + em.imap_port : '');
+      if (em.smtp_host) document.getElementById('cfg-email-smtp').value = em.smtp_host + (em.smtp_port ? ':' + em.smtp_port : '');
+    }
+  }
+
+  // Tab 4: Storage
+  if (s.storage) {
+    if (s.storage.inbox_folder) document.getElementById('cfg-dir-inbox').value = s.storage.inbox_folder;
+    if (s.storage.processed_folder) document.getElementById('cfg-dir-processed').value = s.storage.processed_folder;
+    if (s.storage.outputs_folder) document.getElementById('cfg-dir-outputs').value = s.storage.outputs_folder;
+    if (s.storage.vault_folder) document.getElementById('cfg-dir-vault').value = s.storage.vault_folder;
+  }
+}
+
+async function saveAllSettings() {
+  const agentsData = [];
+  document.querySelectorAll('.cfg-agent-card').forEach(card => {
+    const id = card.id.replace('cfg-agent-', '');
+    const status = card.querySelector('.cfg-agent-status').value;
+    const autonomy = card.querySelector('.cfg-agent-autonomy').value;
+    const tone = card.querySelector('.cfg-agent-tone').value;
+    const baseAgent = SQUAD_AGENTS.find(a => a.id === id) || {};
+    agentsData.push({
+      id: id,
+      name: baseAgent.name || id,
+      role: baseAgent.role || '',
+      icon: baseAgent.icon || '🤖',
+      color: baseAgent.color || '#38bdf8',
+      status: status,
+      autonomy: autonomy,
+      tone: tone
+    });
+  });
+
+  const emailSmtpVal = document.getElementById('cfg-email-smtp').value;
+  const emailImapVal = document.getElementById('cfg-email-imap').value;
+
+  const payload = {
+    ai_providers: {
+      active_provider: document.getElementById('cfg-ai-active-provider').value,
+      nous_api_key: document.getElementById('cfg-nous-key').value,
+      nous_model_name: document.getElementById('cfg-nous-model').value,
+      nous_base_url: document.getElementById('cfg-nous-base-url').value,
+      gemini_api_key: document.getElementById('cfg-gemini-key').value,
+      gemini_model: document.getElementById('cfg-gemini-model').value,
+      openai_api_key: document.getElementById('cfg-openai-key').value,
+      openai_model: document.getElementById('cfg-openai-model').value,
+      local_base_url: document.getElementById('cfg-local-url').value,
+      local_api_key: document.getElementById('cfg-local-key').value
+    },
+    agents: agentsData,
+    channels: {
+      whatsapp: {
+        enabled: true,
+        provider: document.getElementById('cfg-wa-provider').value,
+        api_url: document.getElementById('cfg-wa-url').value,
+        instance_name: document.getElementById('cfg-wa-instance').value,
+        api_token: document.getElementById('cfg-wa-token').value,
+        webhook_url: document.getElementById('cfg-wa-webhook').value
+      },
+      telegram: {
+        enabled: true,
+        bot_token: document.getElementById('cfg-tg-token').value,
+        default_chat_id: document.getElementById('cfg-tg-chat').value
+      },
+      email: {
+        enabled: true,
+        email_user: document.getElementById('cfg-email-user').value,
+        email_password: document.getElementById('cfg-email-pass').value,
+        imap_host: emailImapVal.split(':')[0] || 'imap.gmail.com',
+        imap_port: parseInt(emailImapVal.split(':')[1] || '993'),
+        smtp_host: emailSmtpVal.split(':')[0] || 'smtp.gmail.com',
+        smtp_port: parseInt(emailSmtpVal.split(':')[1] || '587')
+      }
+    },
+    storage: {
+      inbox_folder: document.getElementById('cfg-dir-inbox').value,
+      processed_folder: document.getElementById('cfg-dir-processed').value,
+      outputs_folder: document.getElementById('cfg-dir-outputs').value,
+      vault_folder: document.getElementById('cfg-dir-vault').value
+    }
+  };
+
+  localStorage.setItem('agentquest_settings', JSON.stringify(payload));
+  globalSettings = payload;
+
+  if (isOnline) {
+    try {
+      const res = await API.saveSettings(payload);
+      showToast('💾 ' + res.message, 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('⚠️ Salvo no navegador, mas erro ao sincronizar com servidor.', 'info');
+    }
+  } else {
+    showToast('💾 Configurações salvas localmente com sucesso!', 'success');
+  }
+
+  closeSettingsModal();
+}
+
+async function testCurrentAIConnection() {
+  const provider = document.getElementById('cfg-ai-active-provider').value;
+  const statusEl = document.getElementById('cfg-test-status');
+  statusEl.className = 'test-status-msg loading';
+  statusEl.textContent = '⏳ Testando conexão com a IA...';
+
+  let apiKey = '';
+  let model = '';
+  let baseUrl = '';
+
+  if (provider === 'nous_openrouter') {
+    apiKey = document.getElementById('cfg-nous-key').value;
+    model = document.getElementById('cfg-nous-model').value;
+    baseUrl = document.getElementById('cfg-nous-base-url').value;
+  } else if (provider === 'gemini') {
+    apiKey = document.getElementById('cfg-gemini-key').value;
+    model = document.getElementById('cfg-gemini-model').value;
+  } else if (provider === 'openai') {
+    apiKey = document.getElementById('cfg-openai-key').value;
+    model = document.getElementById('cfg-openai-model').value;
+  } else if (provider === 'local') {
+    apiKey = document.getElementById('cfg-local-key').value;
+    baseUrl = document.getElementById('cfg-local-url').value;
+  }
+
+  try {
+    const res = await API.testAI({
+      provider: provider,
+      api_key: apiKey,
+      model: model,
+      base_url: baseUrl
+    });
+    if (res.success) {
+      statusEl.className = 'test-status-msg success';
+      statusEl.textContent = '✅ ' + res.message;
+      showToast('✅ ' + res.message, 'success');
+    } else {
+      statusEl.className = 'test-status-msg error';
+      statusEl.textContent = '❌ ' + res.message;
+      showToast('❌ ' + res.message, 'error');
+    }
+  } catch (e) {
+    statusEl.className = 'test-status-msg error';
+    statusEl.textContent = '❌ Erro de conexão com o servidor local.';
+    showToast('❌ Erro de rede ao testar IA.', 'error');
+  }
+}
+
 window.addEventListener('click', (e) => {
   const reportOverlay = document.getElementById('report-modal-overlay');
   if (e.target === reportOverlay) {
@@ -1043,6 +1603,296 @@ window.addEventListener('click', (e) => {
   if (e.target === editOverlay) {
     closeEditDraftModal();
   }
+  const rejectOverlay = document.getElementById('reject-modal-overlay');
+  if (e.target === rejectOverlay) {
+    closeRejectModal();
+  }
+  const rejectedOverlay = document.getElementById('rejected-modal-overlay');
+  if (e.target === rejectedOverlay) {
+    closeRejectedMissionsModal();
+  }
+  const settingsOverlay = document.getElementById('settings-modal-overlay');
+  if (e.target === settingsOverlay) {
+    closeSettingsModal();
+  }
+  const oracleOverlay = document.getElementById('oracle-modal-overlay');
+  if (e.target === oracleOverlay) {
+    closeOracleModal();
+  }
 });
 
+// ══════════════════════════════════════════════════════════════════
+// ── ORÁCULO & MEMÓRIA VIVA HANDLERS ───────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+
+function openOracleModal() {
+  const overlay = document.getElementById('oracle-modal-overlay');
+  if (overlay) overlay.classList.add('active');
+  loadOracleChatHistory();
+  loadKnowledgeGaps();
+  loadOracleFacts();
+}
+
+function closeOracleModal() {
+  const overlay = document.getElementById('oracle-modal-overlay');
+  if (overlay) overlay.classList.remove('active');
+}
+
+function switchOracleTab(tabName) {
+  document.querySelectorAll('.oracle-tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.oracle-tab-pane').forEach(pane => pane.classList.remove('active'));
+
+  const activeBtn = Array.from(document.querySelectorAll('.oracle-tab-btn')).find(b => b.getAttribute('onclick') && b.getAttribute('onclick').includes(tabName));
+  if (activeBtn) activeBtn.classList.add('active');
+
+  const pane = document.getElementById('oracle-tab-' + tabName);
+  if (pane) pane.classList.add('active');
+
+  if (tabName === 'gaps') loadKnowledgeGaps();
+  if (tabName === 'facts') loadOracleFacts();
+}
+
+function handleOracleKeyPress(e) {
+  if (e.key === 'Enter') {
+    sendOracleMessage();
+  }
+}
+
+async function loadOracleChatHistory() {
+  if (!isOnline) return;
+  try {
+    const res = await fetch(API_BASE + '/api/oracle/chat');
+    const messages = await res.json();
+    const box = document.getElementById('oracle-messages-list');
+    if (!box) return;
+
+    if (messages && messages.length > 0) {
+      box.innerHTML = messages.map(m => `
+        <div class="oracle-msg-bubble ${m.sender}">
+          <div class="oracle-msg-header">${m.sender === 'user' ? '👤 Você' : '🤖 Oráculo'} ${m.created_at ? '• ' + m.created_at : ''}</div>
+          <div class="oracle-msg-text">${m.message.replace(/\n/g, '<br>')}</div>
+        </div>
+      `).join('');
+      box.scrollTop = box.scrollHeight;
+    }
+  } catch (e) {
+    console.error('Erro ao carregar chat do oráculo:', e);
+  }
+}
+
+async function sendOracleMessage() {
+  const input = document.getElementById('oracle-input-text');
+  if (!input) return;
+  const question = input.value.trim();
+  if (!question) return;
+
+  input.value = '';
+  const box = document.getElementById('oracle-messages-list');
+
+  // Adiciona bolha do usuário imediatamente
+  const userBubble = document.createElement('div');
+  userBubble.className = 'oracle-msg-bubble user';
+  userBubble.innerHTML = `
+    <div class="oracle-msg-header">👤 Você</div>
+    <div class="oracle-msg-text">${question}</div>
+  `;
+  box.appendChild(userBubble);
+
+  // Adiciona bolha de pensando
+  const loadingBubble = document.createElement('div');
+  loadingBubble.className = 'oracle-msg-bubble oracle';
+  loadingBubble.id = 'oracle-loading-msg';
+  loadingBubble.innerHTML = `
+    <div class="oracle-msg-header">🤖 Oráculo</div>
+    <div class="oracle-msg-text"><em>Consultando memórias e cruzando conversas... 🧠</em></div>
+  `;
+  box.appendChild(loadingBubble);
+  box.scrollTop = box.scrollHeight;
+
+  if (isOnline) {
+    try {
+      const res = await fetch(API_BASE + '/api/oracle/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: question })
+      });
+      const data = await res.json();
+      
+      const loadEl = document.getElementById('oracle-loading-msg');
+      if (loadEl) loadEl.remove();
+
+      const answerBubble = document.createElement('div');
+      answerBubble.className = 'oracle-msg-bubble oracle';
+      answerBubble.innerHTML = `
+        <div class="oracle-msg-header">🤖 Oráculo ${data.timestamp ? '• ' + data.timestamp : ''}</div>
+        <div class="oracle-msg-text">${(data.answer || '').replace(/\n/g, '<br>')}</div>
+      `;
+      box.appendChild(answerBubble);
+      box.scrollTop = box.scrollHeight;
+    } catch (e) {
+      console.error(e);
+      const loadEl = document.getElementById('oracle-loading-msg');
+      if (loadEl) {
+        loadEl.innerHTML = `
+          <div class="oracle-msg-header">🤖 Oráculo</div>
+          <div class="oracle-msg-text" style="color: #f87171;">Erro ao processar resposta com o servidor.</div>
+        `;
+      }
+    }
+  } else {
+    setTimeout(() => {
+      const loadEl = document.getElementById('oracle-loading-msg');
+      if (loadEl) {
+        loadEl.innerHTML = `
+          <div class="oracle-msg-header">🤖 Oráculo</div>
+          <div class="oracle-msg-text">[DEMO] Resposta simulada baseada nas conversas registradas.</div>
+        `;
+      }
+    }, 600);
+  }
+}
+
+async function loadKnowledgeGaps() {
+  if (!isOnline) return;
+  try {
+    const res = await fetch(API_BASE + '/api/oracle/gaps');
+    const gaps = await res.json();
+    const listEl = document.getElementById('oracle-gaps-list');
+    const badgeEl = document.getElementById('oracle-gaps-badge');
+    if (!listEl) return;
+
+    const pendingCount = gaps.filter(g => g.status === 'pending').length;
+    if (badgeEl) badgeEl.textContent = pendingCount;
+
+    if (!gaps || gaps.length === 0) {
+      listEl.innerHTML = '<div style="color: #94a3b8; padding: 20px; text-align: center;">🎉 Nenhuma dúvida pendente! A IA compreendeu todos os termos das conversas.</div>';
+      return;
+    }
+
+    listEl.innerHTML = gaps.map(g => {
+      const isPending = (g.status === 'pending');
+      return `
+        <div class="gap-card ${isPending ? '' : 'resolved'}" id="gap-card-${g.id}">
+          <div class="gap-card-header">
+            <span class="gap-term-badge">❓ ${g.term}</span>
+            <span style="font-size: 11px; color: ${isPending ? '#f87171' : '#4ade80'}; font-weight: 700;">
+              ${isPending ? '● Aguardando sua explicação' : '✅ Aprendido'}
+            </span>
+          </div>
+          <div style="font-size: 12px; color: #cbd5e1;">${g.question}</div>
+          <div style="font-size: 10px; color: #64748b;">Detectado em: ${g.detected_in || 'Conversas recentes'}</div>
+          
+          ${isPending ? `
+            <div class="gap-input-row">
+              <input type="text" id="gap-answer-input-${g.id}" placeholder="Explique o que é este termo...">
+              <button class="btn-teach-gap" onclick="submitGapAnswer(${g.id})">
+                <span>🎓 Ensinar</span>
+              </button>
+            </div>
+          ` : `
+            <div style="font-size: 11.5px; color: #86efac; background: rgba(34,197,94,0.1); padding: 8px 12px; border-radius: 8px; margin-top: 4px;">
+              <strong>Você ensinou:</strong> ${g.learned_definition}
+            </div>
+          `}
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    console.error('Erro ao carregar dúvidas:', e);
+  }
+}
+
+async function submitGapAnswer(gapId) {
+  const input = document.getElementById('gap-answer-input-' + gapId);
+  if (!input) return;
+  const answer = input.value.trim();
+  if (!answer) {
+    showToast('⚠️ Digite a definição do termo para ensinar a IA.', 'error');
+    return;
+  }
+
+  showToast('🧠 Ensinando a IA e salvando na Base de Conhecimento...', 'info');
+
+  try {
+    const res = await fetch(API_BASE + '/api/oracle/gaps/' + gapId + '/answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answer: answer })
+    });
+    const data = await res.json();
+    showToast('✅ ' + data.message, 'success');
+    appendFeedItem({
+      color: '#10b981',
+      agent: 'Você (Humano)',
+      text: 'Ensinou o Oráculo sobre o termo <strong>' + (data.gap ? data.gap.term : '') + '</strong> com sucesso.'
+    });
+    loadKnowledgeGaps();
+  } catch (e) {
+    console.error(e);
+    showToast('❌ Erro ao enviar resposta.', 'error');
+  }
+}
+
+async function loadOracleFacts() {
+  if (!isOnline) return;
+  try {
+    const res = await fetch(API_BASE + '/api/oracle/facts');
+    const facts = await res.json();
+    const listEl = document.getElementById('oracle-facts-list');
+    if (!listEl) return;
+
+    if (!facts || facts.length === 0) {
+      listEl.innerHTML = '<div style="color: #94a3b8; padding: 20px; text-align: center;">Nenhum fato minerado ainda. Cole uma conversa na aba "Minerar Texto" para começar!</div>';
+      return;
+    }
+
+    listEl.innerHTML = facts.map(f => `
+      <div class="fact-item-card">
+        <div class="fact-badge-row">
+          <span class="fact-category-tag">${f.category}</span>
+          <span style="font-size: 11px; font-weight: 700; color: #f8fafc;">${f.subject}</span>
+          <span style="font-size: 11px; color: #94a3b8;">${f.relation}</span>
+          <span style="font-size: 11px; color: #38bdf8; font-weight: 600;">${f.object_value}</span>
+        </div>
+        <div style="font-size: 11.5px; color: #cbd5e1; margin-top: 4px;">${f.context_summary}</div>
+        <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
+          Fonte: <strong>${f.source_person}</strong> (${f.source_channel}) • ${f.created_at}
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error('Erro ao carregar fatos:', e);
+  }
+}
+
+async function submitCustomMining() {
+  const person = document.getElementById('mine-input-person').value.trim() || 'Contato';
+  const channel = document.getElementById('mine-input-channel').value;
+  const text = document.getElementById('mine-input-text').value.trim();
+
+  if (!text) {
+    showToast('⚠️ Cole o texto da conversa para minerar.', 'error');
+    return;
+  }
+
+  showToast('🔍 Agente Minerador analisando texto e extraindo fatos...', 'info');
+
+  try {
+    const res = await fetch(API_BASE + '/api/oracle/mine-text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text, person: person, channel: channel })
+    });
+    const data = await res.json();
+    showToast(`✅ Mineração concluída! ${data.facts_extracted || 0} fatos salvos e ${data.gaps_found || 0} dúvidas geradas.`, 'success');
+    document.getElementById('mine-input-text').value = '';
+    switchOracleTab('facts');
+  } catch (e) {
+    console.error(e);
+    showToast('❌ Erro ao minerar texto.', 'error');
+  }
+}
+
 window.addEventListener('DOMContentLoaded', initApp);
+
+

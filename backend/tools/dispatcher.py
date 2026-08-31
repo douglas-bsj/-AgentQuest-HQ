@@ -115,17 +115,54 @@ class ActionDispatcher:
         return {"status": "saved", "channel": "telegram", "file": f"outputs/{filename}"}
 
     def _dispatch_whatsapp(self, destination: str, message_text: str) -> dict:
-        """Gera link wa.me pronto para envio e salva arquivo em outputs/"""
+        """Envia mensagem real via Evolution API/Z-API ou gera link wa.me como fallback."""
+        from backend.tools.settings_manager import settings_manager
+        settings = settings_manager.get_settings()
+        wa_cfg = settings.get("channels", {}).get("whatsapp", {})
+
+        provider = wa_cfg.get("provider", "evolution")
+        api_url = wa_cfg.get("api_url", "").rstrip("/")
+        instance = wa_cfg.get("instance_name", "agentquest")
+        api_token = wa_cfg.get("api_token", "")
+        
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         encoded_text = urllib.parse.quote(message_text)
-        # Extrai apenas números de telefone se disponíveis
         clean_phone = "".join(c for c in destination if c.isdigit())
         wa_link = f"https://wa.me/{clean_phone}?text={encoded_text}" if clean_phone else f"https://wa.me/?text={encoded_text}"
 
+        # Tenta envio automático via Evolution API se configurado
+        if provider == "evolution" and api_url and api_token and clean_phone:
+            try:
+                # Endpoint padrão da Evolution API v2: POST /message/sendText/{instance}
+                endpoint = f"{api_url}/message/sendText/{instance}"
+                headers = {
+                    "apikey": api_token,
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "number": clean_phone,
+                    "text": message_text
+                }
+                res = httpx.post(endpoint, json=payload, headers=headers, timeout=12.0)
+                if res.status_code in [200, 201]:
+                    print(f"[DISPATCH EVOLUTION API] Mensagem enviada automaticamente para {clean_phone}!")
+                    return {
+                        "status": "sent",
+                        "channel": "whatsapp",
+                        "method": "Evolution API",
+                        "destination": clean_phone,
+                        "wa_link": wa_link
+                    }
+                else:
+                    print(f"[DISPATCH EVOLUTION API] Retorno {res.status_code}: {res.text}")
+            except Exception as e:
+                print(f"[DISPATCH EVOLUTION API] Falha na requisição: {e}")
+
+        # Fallback padrão seguro: grava em outputs/ e disponibiliza wa.link
         filename = f"whatsapp_{timestamp}.txt"
         file_path = os.path.join(OUTPUTS_DIR, filename)
         with open(file_path, "w", encoding="utf-8") as f:
-            f.write(f"Destinatário: {destination}\nLink WhatsApp Web: {wa_link}\nData: {datetime.datetime.now()}\n\n{message_text}")
+            f.write(f"Destinatário: {destination} ({clean_phone})\nLink WhatsApp Web: {wa_link}\nData: {datetime.datetime.now()}\n\n{message_text}")
 
         print(f"[DISPATCH WHATSAPP] Resposta gerada. Link direto: {wa_link[:60]}...")
         return {"status": "prepared", "channel": "whatsapp", "wa_link": wa_link, "file": f"outputs/{filename}"}

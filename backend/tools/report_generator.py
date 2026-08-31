@@ -9,7 +9,7 @@ import json
 import datetime
 from sqlalchemy.orm import Session
 from backend.database import Mission, AgentLog, ActionHistory
-from backend.agents.base_agent import BaseAgent
+from backend.agents.nous_hermes_agent import NousHermesAgent
 from backend.tools.obsidian_bridge import obsidian_bridge
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -70,7 +70,7 @@ REGRAS:
 - synthesis: HTML com parágrafos <p>, listas <ul> e <li> com diagnósticos e recomendações executivas concretas.
 """
 
-    agent = BaseAgent("Hermes BI", system_prompt)
+    agent = NousHermesAgent("Hermes BI", system_prompt)
     prompt = (
         f"Tipo de Relatório Solicitado: {report_type}\n"
         f"Pergunta / Consulta personalizada do usuário: {custom_query or 'Nenhuma (preset padrão)'}\n\n"

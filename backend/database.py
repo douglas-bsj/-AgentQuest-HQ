@@ -58,7 +58,48 @@ class ActionHistory(Base):
     mission_id = Column(Integer, nullable=False)
     action = Column(String(20), nullable=False)            # approved | rejected
     edited_response = Column(Text, nullable=True)          # Texto editado (se alterado)
-    executed_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class MemoryFact(Base):
+    """Fatos e memórias mineradas a partir de conversas."""
+    __tablename__ = "memory_facts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    subject = Column(String(150), nullable=False)          # Ex: "Cartões de Futebol", "João Silva"
+    relation = Column(String(100), nullable=False)         # Ex: "está_com", "reclamou_de", "deixou_em"
+    object_value = Column(String(250), nullable=False)     # Ex: "casa do Carlos", "prazo da proposta"
+    category = Column(String(50), default="Geral")         # Ex: "Pessoal", "Futebol", "Comercial", "Financeiro"
+    context_summary = Column(Text, nullable=False)         # Trecho ou resumo da conversa
+    source_person = Column(String(100), default="Desconhecido") # Quem disse
+    source_channel = Column(String(50), default="whatsapp")     # whatsapp, telegram, email
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class KnowledgeGap(Base):
+    """Dúvidas e lacunas de aprendizado identificadas pela IA para perguntar ao humano."""
+    __tablename__ = "knowledge_gaps"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    term_or_topic = Column(String(150), nullable=False)     # Ex: "despaletamento triplo"
+    category = Column(String(50), default="Vocabulário")
+    detected_in_sources = Column(Text, nullable=True)      # Em quais conversas foi visto
+    question_to_human = Column(Text, nullable=False)       # Ex: "Notei o termo 'X', o que ele significa?"
+    learned_definition = Column(Text, nullable=True)       # Resposta ensinada pelo humano
+    status = Column(String(20), default="pending")         # pending | resolved
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+
+
+class OracleChatMessage(Base):
+    """Mensagens trocadas no Chat Interativo entre Humano e o Oráculo."""
+    __tablename__ = "oracle_chat_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    sender = Column(String(20), nullable=False)            # user | oracle
+    message = Column(Text, nullable=False)
+    sources_cited = Column(Text, nullable=True)            # Fontes ou fatos consultados (JSON)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -160,29 +201,14 @@ SEED_LOGS = [
 
 def init_db(force_reset=False):
     """
-    Cria as tabelas e popula com dados iniciais.
-    Se force_reset=True, apaga o banco e recria do zero.
-    Se o banco já existir e tiver dados, não faz nada.
+    Cria as tabelas do banco de dados SQLite.
+    Se force_reset=True, apaga o banco e recria limpo do zero.
     """
     if force_reset and os.path.exists(DB_PATH):
         os.remove(DB_PATH)
 
     Base.metadata.create_all(bind=engine)
 
-    db = SessionLocal()
-    try:
-        # Só popula se o banco estiver vazio
-        if db.query(Mission).count() == 0:
-            for m in SEED_MISSIONS:
-                db.add(Mission(**m))
-            db.commit()
-
-        if db.query(AgentLog).count() == 0:
-            for log in SEED_LOGS:
-                db.add(AgentLog(**log))
-            db.commit()
-    finally:
-        db.close()
 
 
 def get_db():
