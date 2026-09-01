@@ -44,11 +44,14 @@ class ActionDispatcher:
 
     def _dispatch_email(self, destination: str, subject: str, body: str, attachments: list = None) -> dict:
         """Envia e-mail via SMTP ou salva como minuta em outputs/"""
-        smtp_host = os.getenv("SMTP_HOST", "")
-        smtp_port = int(os.getenv("SMTP_PORT", "587")) if os.getenv("SMTP_PORT") else 587
-        smtp_user = os.getenv("SMTP_USER", "")
-        smtp_pass = os.getenv("SMTP_PASS", "")
-        smtp_from = os.getenv("SMTP_FROM", smtp_user)
+        from backend.tools.settings_manager import settings_manager
+        cfg = settings_manager.get_settings().get("channels", {}).get("email", {})
+        
+        smtp_host = cfg.get("smtp_host") or os.getenv("SMTP_HOST", "smtp.gmail.com")
+        smtp_port = int(cfg.get("smtp_port") or os.getenv("SMTP_PORT", 587))
+        smtp_user = cfg.get("email_user") or os.getenv("SMTP_USER", "")
+        smtp_pass = (cfg.get("email_password") or os.getenv("SMTP_PASS", "")).replace(" ", "")
+        smtp_from = smtp_user
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 

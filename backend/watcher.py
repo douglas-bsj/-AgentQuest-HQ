@@ -111,9 +111,87 @@ class InboxHandler(FileSystemEventHandler):
             process_inbox_file(event.dest_path)
 
 
+def poll_emails_loop():
+    """Loop contínuo que conecta via IMAP e baixa e-mails não lidos para triagem dos agentes."""
+    import imaplib
+    import email
+    from email.header import decode_header
+    from backend.tools.settings_manager import settings_manager
+
+    print("[EMAIL WATCHER] Iniciando monitoramento automático de novos e-mails...")
+    while True:
+        try:
+            cfg = settings_manager.get_settings().get("channels", {}).get("email", {})
+            enabled = cfg.get("enabled", False)
+            user = cfg.get("email_user", "")
+            password = (cfg.get("email_password", "")).replace(" ", "")
+            imap_host = cfg.get("imap_host", "imap.gmail.com")
+            imap_port = int(cfg.get("imap_port", 993))
+
+            if enabled and user and password:
+                mail = imaplib.IMAP4_SSL(imap_host, imap_port)
+                mail.login(user, password)
+                mail.select("inbox")
+
+                # Busca e-mails não lidos
+                status, messages = mail.search(None, "UNSEEN")
+                if status == "OK" and messages[0]:
+                    email_ids = messages[0].split()
+                    print(f"\n[EMAIL WATCHER] {len(email_ids)} novo(s) e-mail(s) detectado(s)!")
+                    for e_id in email_ids:
+                        res, msg_data = mail.fetch(e_id, "(RFC822)")
+                        for response_part in msg_data:
+                            if isinstance(response_part, tuple):
+                                msg = email.message_from_bytes(response_part[1])
+                                
+                                # Extrai assunto
+                                subject, encoding = decode_header(msg.get("Subject", "Sem Assunto"))[0]
+                                if isinstance(subject, bytes):
+                                    subject = subject.decode(encoding if encoding else "utf-8", errors="ignore")
+                                
+                                from_sender = msg.get("From", "Remetente Desconhecido")
+                                
+                                # Extrai corpo do texto
+                                body_content = ""
+                                if msg.is_multipart():
+                                    for part in msg.walk():
+                                        if part.get_content_type() == "text/plain":
+                                            payload = part.get_payload(decode=True)
+                                            if payload:
+                                                body_content = payload.decode(part.get_content_charset() or "utf-8", errors="ignore")
+                                                break
+                                else:
+                                    payload = msg.get_payload(decode=True)
+                                    if payload:
+                                        body_content = payload.decode(msg.get_content_charset() or "utf-8", errors="ignore")
+
+                                raw_text = f"E-mail de {from_sender}\nAssunto: {subject}\n\n{body_content}"
+                                print(f"[EMAIL WATCHER] Processando e-mail: \"{subject}\" de {from_sender}")
+
+                                db = SessionLocal()
+                                try:
+                                    mission = hermes_orchestrator.process_incoming_event(
+                                        raw_text=raw_text,
+                                        source="email",
+                                        db=db,
+                                        sender_override=from_sender
+                                    )
+                                    print(f"[EMAIL WATCHER] Missão #{mission.id if mission else '?'} gerada com sucesso!")
+                                finally:
+                                    db.close()
+
+                mail.close()
+                mail.logout()
+        except Exception as e:
+            # Silencia erros de conexão intermitente
+            pass
+
+        time.sleep(10)  # Verifica novos e-mails a cada 10 segundos
+
+
 def start_watcher_thread():
     """
-    Inicia o monitoramento da pasta inbox/ em uma thread separada.
+    Inicia o monitoramento da pasta inbox/ e polling de e-mail em threads separadas.
     """
     import threading
 
@@ -131,5 +209,8 @@ def start_watcher_thread():
         full_p = os.path.join(INBOX_DIR, f)
         if os.path.isfile(full_p) and not f.startswith("."):
             threading.Thread(target=process_inbox_file, args=(full_p,), daemon=True).start()
+
+    # Inicia polling contínuo de e-mails IMAP
+    threading.Thread(target=poll_emails_loop, daemon=True).start()
 
     return observer

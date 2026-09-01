@@ -247,9 +247,7 @@ async function initApp() {
 function loadDemoMode() {
   renderSquadAgents();
   renderBottomDock();
-  INITIAL_MISSIONS.forEach(function(m, idx) {
-    setTimeout(function() { addMissionCard(m); }, idx * 200);
-  });
+  // Não injeta mais missões fictícias
 }
 
 function updateConnectionBadge() {
@@ -306,7 +304,14 @@ function addMissionCardWithId(serverId, data) {
 
   var sourceLabel = data.source === 'whatsapp' ? '💬 WhatsApp' : (data.source === 'telegram' ? '✈️ Telegram' : '📧 E-mail');
 
-  card.innerHTML =
+    var incomingText = data.received_message || data.title || '';
+    if (incomingText.indexOf('Mensagem de') !== -1) {
+      incomingText = incomingText.split(':\n').slice(1).join(':\n').trim() || incomingText;
+    } else if (incomingText.indexOf('—') !== -1) {
+      incomingText = incomingText.split('—')[0].trim();
+    }
+
+    card.innerHTML =
     '<div class="mission-header-bar ' + data.source + '">' +
       '<span>' + sourceLabel + '</span>' +
       (data.urgent ? '<span class="tag-urgente">URGENTE</span>' : '') +
@@ -317,8 +322,11 @@ function addMissionCardWithId(serverId, data) {
         '<span class="info-tag">🤖 Agente: <strong>' + data.agent + '</strong></span>' +
         '<span class="info-tag">📅 Prazo: ' + data.deadline + '</span>' +
       '</div>' +
+      '<div class="mission-preview-snippet" style="font-size: 11.5px; color: #38bdf8; background: rgba(56, 189, 248, 0.08); padding: 8px 12px; border-radius: 8px; margin: 8px 0; border: 1px solid rgba(56, 189, 248, 0.2);">' +
+        '<strong>📩 Mensagem Recebida:</strong> "' + (incomingText ? incomingText.substring(0, 140) : 'Mensagem direta do contato') + '"' +
+      '</div>' +
       '<button class="draft-toggle-btn" onclick="toggleDraftAccordion(this)" title="Expandir resposta preparada pelo agente">' +
-        '<span>✍️ Ver Ação & Resposta Preparada</span>' +
+        '<span>✍️ Ver Resposta Preparada pelo Agente</span>' +
         '<span class="draft-arrow">▼</span>' +
       '</button>' +
       '<div class="draft-collapse">' +
@@ -409,6 +417,13 @@ function addMissionCard(data) {
 
   const sourceLabel = data.source === 'whatsapp' ? '💬 WhatsApp' : data.source === 'telegram' ? '✈️ Telegram' : '📧 E-mail';
 
+  var incomingText = data.received_message || data.title || '';
+  if (incomingText.indexOf('Mensagem de') !== -1) {
+    incomingText = incomingText.split(':\n').slice(1).join(':\n').trim() || incomingText;
+  } else if (incomingText.indexOf('—') !== -1) {
+    incomingText = incomingText.split('—')[0].trim();
+  }
+
   card.innerHTML = 
     '<div class="mission-header-bar ' + data.source + '">' +
       '<span>' + sourceLabel + '</span>' +
@@ -420,8 +435,11 @@ function addMissionCard(data) {
         '<span class="info-tag">🤖 Agente: <strong>' + data.agent + '</strong></span>' +
         '<span class="info-tag">📅 Prazo: ' + data.deadline + '</span>' +
       '</div>' +
+      '<div class="mission-preview-snippet" style="font-size: 11.5px; color: #38bdf8; background: rgba(56, 189, 248, 0.08); padding: 8px 12px; border-radius: 8px; margin: 8px 0; border: 1px solid rgba(56, 189, 248, 0.2);">' +
+        '<strong>📩 Mensagem Recebida:</strong> "' + (incomingText ? incomingText.substring(0, 140) : 'Mensagem direta do contato') + '"' +
+      '</div>' +
       '<button class="draft-toggle-btn" onclick="toggleDraftAccordion(this)" title="Expandir resposta preparada pelo agente">' +
-        '<span>✍️ Ver Ação & Resposta Preparada</span>' +
+        '<span>✍️ Ver Resposta Preparada pelo Agente</span>' +
         '<span class="draft-arrow">▼</span>' +
       '</button>' +
       '<div class="draft-collapse">' +
@@ -812,7 +830,7 @@ function startFeedLoop() {
     } catch (e) {
       console.warn('Erro na sincronização em tempo real:', e);
     }
-  }, 3000);
+  }, 1000);
 }
 
 function appendFeedItem(item) {
@@ -1435,6 +1453,7 @@ function populateSettingsForm(s) {
       if (wa.instance_name) document.getElementById('cfg-wa-instance').value = wa.instance_name;
       if (wa.api_token) document.getElementById('cfg-wa-token').value = wa.api_token;
       if (wa.webhook_url) document.getElementById('cfg-wa-webhook').value = wa.webhook_url;
+      if (wa.ignore_groups !== undefined) document.getElementById('cfg-wa-ignore-groups').value = String(wa.ignore_groups);
     }
     if (s.channels.telegram) {
       const tg = s.channels.telegram;
@@ -1503,7 +1522,8 @@ async function saveAllSettings() {
         api_url: document.getElementById('cfg-wa-url').value,
         instance_name: document.getElementById('cfg-wa-instance').value,
         api_token: document.getElementById('cfg-wa-token').value,
-        webhook_url: document.getElementById('cfg-wa-webhook').value
+        webhook_url: document.getElementById('cfg-wa-webhook').value,
+        ignore_groups: document.getElementById('cfg-wa-ignore-groups').value === 'true'
       },
       telegram: {
         enabled: true,

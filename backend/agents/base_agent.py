@@ -19,7 +19,7 @@ except ImportError:
     GENAI_AVAILABLE = False
 
 API_KEY = os.getenv("GEMINI_API_KEY", "")
-MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
 if GENAI_AVAILABLE and API_KEY and API_KEY != "sua_chave_aqui":
     client = genai.Client(api_key=API_KEY)
@@ -56,26 +56,33 @@ class BaseAgent:
         if not GEMINI_READY or not client:
             return self._fallback(user_message, expect_json)
 
-        try:
-            config = types.GenerateContentConfig(
-                system_instruction=self.system_prompt,
-                temperature=0.3,
-            )
-            response = client.models.generate_content(
-                model=MODEL_NAME,
-                contents=user_message,
-                config=config
-            )
-            text = response.text.strip() if response and response.text else ""
+        candidate_models = [MODEL_NAME, "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
+        # Remove duplicatas preservando ordem
+        models_to_try = list(dict.fromkeys(candidate_models))
 
-            if expect_json:
-                return self._parse_json(text)
+        for model in models_to_try:
+            try:
+                config = types.GenerateContentConfig(
+                    system_instruction=self.system_prompt,
+                    temperature=0.3,
+                )
+                response = client.models.generate_content(
+                    model=model,
+                    contents=user_message,
+                    config=config
+                )
+                text = response.text.strip() if response and response.text else ""
 
-            return text
+                if expect_json:
+                    return self._parse_json(text)
 
-        except Exception as e:
-            print(f"[ERRO] Agente {self.name}: {e}")
-            return self._fallback(user_message, expect_json)
+                return text
+            except Exception as e:
+                # Se for erro 404 ou cota, tenta o próximo modelo da lista
+                if model == models_to_try[-1]:
+                    print(f"[ERRO] Agente {self.name}: {e}")
+                    return self._fallback(user_message, expect_json)
+                continue
 
     def _parse_json(self, text):
         """Tenta extrair JSON de uma resposta que pode conter markdown."""

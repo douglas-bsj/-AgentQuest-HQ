@@ -34,6 +34,7 @@ class Mission(Base):
     urgent = Column(Boolean, default=False)                # Flag de urgência
     channel = Column(String(200), nullable=False)          # Canal de despacho
     response = Column(Text, nullable=False)                # Resposta rascunhada pelo agente
+    received_message = Column(Text, nullable=True)        # Texto/resumo da mensagem bruta recebida
     status = Column(String(20), default="pending")         # pending | approved | rejected
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     resolved_at = Column(DateTime, nullable=True)

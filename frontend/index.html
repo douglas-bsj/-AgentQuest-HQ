@@ -38,10 +38,6 @@
       <span>✏️</span> <strong>Modo Edição</strong>
     </button>
     
-    <button class="top-btn" onclick="addRandomMission()" title="Simular novo evento recebido">
-      <span>🔄</span> Novo Evento
-    </button>
-    
     <button class="top-btn" onclick="openSettingsModal()" title="Configurações dos agentes, canais e contas de IA">
       <span>⚙️</span>
     </button>
@@ -549,9 +545,16 @@
             <label>Token / API Key da Instância:</label>
             <input type="password" id="cfg-wa-token" class="settings-input" placeholder="Token secreto do WhatsApp">
           </div>
-          <div class="settings-form-group" style="grid-column: 1 / -1;">
+          <div class="settings-form-group">
+            <label>Leitura de Grupos do WhatsApp:</label>
+            <select id="cfg-wa-ignore-groups" class="settings-select">
+              <option value="true">🚫 Ignorar Grupos (Apenas Conversas Individuais)</option>
+              <option value="false">👥 Processar Também Mensagens de Grupos</option>
+            </select>
+          </div>
+          <div class="settings-form-group">
             <label>Webhook de Entrada (Copie e cole no painel do seu WhatsApp):</label>
-            <input type="text" id="cfg-wa-webhook" class="settings-input" readonly value="http://127.0.0.1:8000/api/webhook/whatsapp" style="background: rgba(0,0,0,0.3); color: #38bdf8;">
+            <input type="text" id="cfg-wa-webhook" class="settings-input" readonly value="http://host.docker.internal:8000/api/webhook/whatsapp" style="background: rgba(0,0,0,0.3); color: #38bdf8;">
           </div>
         </div>
 

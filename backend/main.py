@@ -68,6 +68,7 @@ class MissionOut(BaseModel):
     urgent: bool
     channel: str
     response: str
+    received_message: str | None = None
     status: str
     created_at: datetime.datetime
 
@@ -212,9 +213,21 @@ def approve_mission(mission_id: int, db: Session = Depends(get_db)):
 
     # ── Execução Real do Disparo (E-mail, Telegram, WhatsApp, outputs/) ──
     try:
+        # Se for WhatsApp, garante que o número limpo é passado como destino
+        dest = client_name
+        if mission.source == "whatsapp":
+            import re
+            phone_match = re.search(r'\((\d+)\)', mission.title)
+            if phone_match:
+                dest = phone_match.group(1)
+            else:
+                digits = re.sub(r'\D', '', mission.title)
+                if len(digits) >= 10:
+                    dest = digits
+
         dispatch_result = action_dispatcher.dispatch(
             source=mission.source,
-            destination=client_name,
+            destination=dest,
             subject=mission.title,
             message_text=mission.response
         )
@@ -356,6 +369,16 @@ async def receive_whatsapp_webhook(request: Request, db: Session = Depends(get_d
             print("[WHATSAPP WEBHOOK] Ignorando: mensagem enviada pelo próprio usuário (fromMe=True)")
             return {"status": "ignored", "reason": "outgoing_message"}
 
+        # Verifica filtro de grupos
+        remote_jid = key_info.get("remoteJid", "")
+        is_group = "@g.us" in remote_jid or "-" in remote_jid.split("@")[0]
+        
+        cfg = settings_manager.get_settings().get("channels", {}).get("whatsapp", {})
+        ignore_groups = cfg.get("ignore_groups", True)
+        if is_group and ignore_groups:
+            print(f"[WHATSAPP WEBHOOK] Ignorando mensagem de GRUPO ({remote_jid}) conforme configurado.")
+            return {"status": "ignored", "reason": "group_message_ignored"}
+
         # Extrai texto ou legenda de mídia (vídeo, foto, áudio, documento)
         msg = message_data.get("message", {})
         text = (
@@ -384,9 +407,19 @@ async def receive_whatsapp_webhook(request: Request, db: Session = Depends(get_d
                 print(f"[WHATSAPP WEBHOOK] Conteúdo não identificado na mensagem: {list(msg.keys())}")
                 return {"status": "ignored", "reason": "no_supported_content"}
 
-        # Extrai número do remetente
-        sender_phone = key_info.get("remoteJid", "").split("@")[0]
-        sender_name = message_data.get("pushName", sender_phone or "Contato WhatsApp")
+        # Extrai número e nome do remetente (suporte a formato tradicional @s.whatsapp.net e formato moderno @lid)
+        sender_phone = (
+            key_info.get("participantAlt", "").split("@")[0]
+            or message_data.get("participantAlt", "").split("@")[0]
+            or key_info.get("remoteJid", "").split("@")[0]
+        )
+        # Se vier com sufixo ou caracteres não numéricos
+        import re
+        digits_phone = re.sub(r"\D", "", sender_phone)
+        if len(digits_phone) >= 10:
+            sender_phone = digits_phone
+
+        sender_name = message_data.get("pushName") or sender_phone or "Contato WhatsApp"
 
         print(f"[WHATSAPP WEBHOOK] Mensagem válida de {sender_name} ({sender_phone}): {text[:60]}")
         raw_event = f"Mensagem de {sender_name} ({sender_phone}):\n{text}"

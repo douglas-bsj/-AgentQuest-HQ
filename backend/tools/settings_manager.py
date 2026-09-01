@@ -45,7 +45,8 @@ DEFAULT_SETTINGS = {
             "api_url": "http://localhost:8080",
             "instance_name": "agentquest",
             "api_token": "agentquest-secreto-123",
-            "webhook_url": "http://host.docker.internal:8000/api/webhook/whatsapp"
+            "webhook_url": "http://host.docker.internal:8000/api/webhook/whatsapp",
+            "ignore_groups": True
         },
         "telegram": {
             "enabled": True,
@@ -94,6 +95,9 @@ class SettingsManager:
         return DEFAULT_SETTINGS.copy()
 
     def get_all(self) -> dict:
+        return self._settings
+
+    def get_settings(self) -> dict:
         return self._settings
 
     def save(self, new_settings: dict) -> dict:

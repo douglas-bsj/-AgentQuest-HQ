@@ -146,6 +146,7 @@ class HermesOrchestrator:
                 urgent=is_urgent,
                 channel=channel_label,
                 response=final_reviewed_response,
+                received_message=raw_text,
                 status="pending"
             )
             db.add(new_mission)

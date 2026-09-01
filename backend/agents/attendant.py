@@ -47,13 +47,16 @@ class AttendantAgent(BaseAgent):
         result = self.invoke(prompt, expect_json=True)
 
         # Garantir campos minimos
-        if isinstance(result, dict) and "remetente" not in result:
+        if not isinstance(result, dict) or "assunto" not in result or not result.get("assunto"):
+            # Extrai apenas as linhas da mensagem real sem prefixos
+            clean_lines = [l for l in raw_text.splitlines() if not l.startswith("Canal de origem") and not l.startswith("Mensagem de")]
+            first_line = clean_lines[0] if clean_lines else raw_text
             result = {
-                "remetente": "Desconhecido",
-                "assunto": raw_text[:60],
+                "remetente": "Cliente",
+                "assunto": first_line[:60].strip(),
                 "intencao": "solicitacao",
                 "urgencia": "media",
-                "resumo": raw_text[:120],
+                "resumo": first_line[:120].strip(),
             }
 
         return result
