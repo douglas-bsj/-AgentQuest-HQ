@@ -18,6 +18,9 @@ import shutil
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fetch_node import fetch_node
+
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BUILD_DIR = os.path.join(PROJECT_ROOT, "build")
 STAGING_DIR = os.path.join(BUILD_DIR, "staging")
@@ -29,7 +32,7 @@ APP_VERSION = "1.0.0"
 ICON_NAME = "agentquest.ico"
 
 # Só isto entra no pacote distribuído.
-ALLOWED_DIRS = ["backend", "frontend", "vault_template"]
+ALLOWED_DIRS = ["backend", "frontend", "vault_template", "whatsapp-bridge"]
 ALLOWED_FILES = [
     "run.py",
     "start_system.py",
@@ -44,8 +47,13 @@ FORBIDDEN_IN_STAGING = [
     ".env",
     "vault",
     ".git",
+    "whatsapp_session",
     os.path.join("backend", "database.sqlite3"),
+    os.path.join("whatsapp-bridge", "auth_state"),
 ]
+
+# Únicos executáveis permitidos no pacote (Node portátil da ponte de WhatsApp).
+ALLOWED_EXECUTABLES = {os.path.join("node", "node.exe")}
 
 PHONE_PATTERN = re.compile(r"\(\d{10,}\)")
 EXPECTED_VAULT_FOLDERS = {
@@ -89,13 +97,28 @@ def build_staging():
         shutil.rmtree(STAGING_DIR)
     os.makedirs(STAGING_DIR)
 
-    ignore = shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo", "*.sqlite3")
+    # auth_state: sessão de WhatsApp de quem desenvolveu — nunca pode ser distribuída
+    ignore = shutil.ignore_patterns(
+        "__pycache__", "*.pyc", "*.pyo", "*.sqlite3", "auth_state", "whatsapp_session"
+    )
 
     for dirname in ALLOWED_DIRS:
         src = os.path.join(PROJECT_ROOT, dirname)
         if not os.path.isdir(src):
             fail(f"Pasta obrigatória ausente: {dirname}/")
         shutil.copytree(src, os.path.join(STAGING_DIR, dirname), ignore=ignore)
+
+    if not os.path.isdir(os.path.join(STAGING_DIR, "whatsapp-bridge", "node_modules")):
+        fail(
+            "whatsapp-bridge/node_modules ausente. Rode:\n"
+            "  cd whatsapp-bridge && npm install"
+        )
+
+    # Node portátil, para a ponte de WhatsApp rodar sem Node instalado na máquina
+    node_exe = fetch_node()
+    node_destino = os.path.join(STAGING_DIR, "node")
+    os.makedirs(node_destino, exist_ok=True)
+    shutil.copy2(node_exe, os.path.join(node_destino, "node.exe"))
 
     for filename in ALLOWED_FILES:
         src = os.path.join(PROJECT_ROOT, filename)
@@ -123,7 +146,17 @@ def assert_staging_is_clean():
         for name in files:
             if name.endswith((".sqlite3", ".db", ".exe")):
                 rel = os.path.relpath(os.path.join(root, name), STAGING_DIR)
+                if rel in ALLOWED_EXECUTABLES:
+                    continue
                 fail(f"Arquivo não permitido no staging: {rel}")
+
+    # A sessão do WhatsApp de quem desenvolveu jamais pode ser distribuída:
+    # quem instalasse o pacote entraria na conta de outra pessoa.
+    for root, dirs, files in os.walk(STAGING_DIR):
+        for nome in list(dirs) + list(files):
+            if nome in ("auth_state", "whatsapp_session") or nome.startswith("creds.json"):
+                rel = os.path.relpath(os.path.join(root, nome), STAGING_DIR)
+                fail(f"Sessão de WhatsApp encontrada no staging: {rel}")
 
     print("[OK] Staging validado — nenhum dado real ou binário indevido.")
 

@@ -45,3 +45,11 @@ build/output/
 backend/database.sqlite3
 backend/__pycache__/
 __pycache__/
+
+# Node portátil baixado sob demanda (scripts/fetch_node.py)
+build/vendor/
+
+# Dependências e sessão da ponte de WhatsApp
+whatsapp-bridge/node_modules/
+whatsapp-bridge/auth_state/
+whatsapp_session/

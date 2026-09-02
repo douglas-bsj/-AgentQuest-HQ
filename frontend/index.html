@@ -725,24 +725,12 @@
         <div class="settings-form-grid">
           <div class="settings-form-group">
             <label>Tipo de Conexão WhatsApp:</label>
-            <select id="cfg-wa-provider" class="settings-select">
-              <option value="evolution">Evolution API (Recomendado)</option>
-              <option value="zapi">Z-API</option>
-              <option value="twilio">Twilio WhatsApp Business</option>
-              <option value="mock">Modo Simulado / Link Direto (wa.me)</option>
+            <select id="cfg-wa-provider" class="settings-select" onchange="toggleWhatsAppProviderFields(true)">
+              <option value="baileys">Conexão Direta por QR Code (sem Docker) — ideal para testes</option>
+              <option value="meta_official">WhatsApp Cloud API Oficial (Meta) — produção</option>
+              <option value="evolution">Evolution API (requer Docker)</option>
+              <option value="mock">Somente link wa.me (envio manual em 1 clique)</option>
             </select>
-          </div>
-          <div class="settings-form-group">
-            <label>URL da API / Host:</label>
-            <input type="text" id="cfg-wa-url" class="settings-input" placeholder="http://localhost:8080 ou https://api.z-api.io">
-          </div>
-          <div class="settings-form-group">
-            <label>Nome da Instância:</label>
-            <input type="text" id="cfg-wa-instance" class="settings-input" placeholder="agentquest">
-          </div>
-          <div class="settings-form-group">
-            <label>Token / API Key da Instância:</label>
-            <input type="password" id="cfg-wa-token" class="settings-input" placeholder="Token secreto do WhatsApp">
           </div>
           <div class="settings-form-group">
             <label>Leitura de Grupos do WhatsApp:</label>
@@ -751,10 +739,80 @@
               <option value="false">👥 Processar Também Mensagens de Grupos</option>
             </select>
           </div>
-          <div class="settings-form-group">
-            <label>Webhook de Entrada (Copie e cole no painel do seu WhatsApp):</label>
-            <input type="text" id="cfg-wa-webhook" class="settings-input" readonly value="http://host.docker.internal:8000/api/webhook/whatsapp" style="background: rgba(0,0,0,0.3); color: #38bdf8;">
+        </div>
+
+        <!-- Campos da conexão direta por QR Code (Baileys) -->
+        <div id="cfg-wa-fields-baileys" class="provider-fields-group">
+          <p class="settings-help-text">
+            Conecta lendo um QR Code, como o WhatsApp Web — sem Docker e sem virtualização.
+            Clique em <strong>Conectar WhatsApp</strong> acima e escaneie com o celular
+            (WhatsApp → Aparelhos conectados → Conectar um aparelho). A sessão fica salva
+            nesta máquina; você só pareia de novo se desconectar.
+          </p>
+        </div>
+
+        <!-- Campos da API oficial da Meta -->
+        <div id="cfg-wa-fields-meta" class="provider-fields-group">
+          <div class="settings-form-grid">
+            <div class="settings-form-group">
+              <label>Phone Number ID:</label>
+              <input type="text" id="cfg-wa-meta-phone-id" class="settings-input" placeholder="Ex: 123456789012345">
+            </div>
+            <div class="settings-form-group">
+              <label>Access Token (permanente):</label>
+              <input type="password" id="cfg-wa-meta-token" class="settings-input" placeholder="EAAG...">
+            </div>
+            <div class="settings-form-group">
+              <label>Verify Token (você escolhe):</label>
+              <input type="text" id="cfg-wa-meta-verify" class="settings-input" placeholder="agentquest-webhook">
+            </div>
+            <div class="settings-form-group">
+              <label>Versão da Graph API:</label>
+              <input type="text" id="cfg-wa-meta-version" class="settings-input" placeholder="v21.0">
+            </div>
           </div>
+          <p class="settings-help-text">
+            Pegue o <strong>Phone Number ID</strong> e o <strong>Access Token</strong> em
+            Meta for Developers → seu App → WhatsApp → Configuração da API.
+            O <strong>Verify Token</strong> é uma senha que você inventa e repete ao cadastrar
+            o webhook na Meta.
+            <br><br>
+            ⚠️ <strong>Para receber mensagens</strong>, a Meta precisa alcançar este computador
+            por um endereço HTTPS público — numa instalação local isso exige expor a porta
+            (túnel). O <strong>envio</strong> funciona sem nenhuma exposição.
+          </p>
+        </div>
+
+        <!-- Campos da Evolution API -->
+        <div id="cfg-wa-fields-evolution" class="provider-fields-group">
+          <div class="settings-form-grid">
+            <div class="settings-form-group">
+              <label>URL da API / Host:</label>
+              <input type="text" id="cfg-wa-url" class="settings-input" placeholder="http://localhost:8080">
+            </div>
+            <div class="settings-form-group">
+              <label>Nome da Instância:</label>
+              <input type="text" id="cfg-wa-instance" class="settings-input" placeholder="agentquest">
+            </div>
+            <div class="settings-form-group">
+              <label>Token / API Key da Instância:</label>
+              <input type="password" id="cfg-wa-token" class="settings-input" placeholder="Token secreto do WhatsApp">
+            </div>
+            <div class="settings-form-group">
+              <label>Webhook de Entrada (cole no painel da Evolution):</label>
+              <input type="text" id="cfg-wa-webhook" class="settings-input" placeholder="http://host.docker.internal:8000/api/webhook/whatsapp">
+            </div>
+          </div>
+        </div>
+
+        <!-- Modo link wa.me -->
+        <div id="cfg-wa-fields-mock" class="provider-fields-group">
+          <p class="settings-help-text">
+            Neste modo o sistema escreve a resposta e gera um link do WhatsApp: você clica,
+            confere e envia. Não há conexão de conta nem recebimento automático — para
+            alimentar os agentes, exporte a conversa no WhatsApp e coloque o arquivo
+            <code>.txt</code> na pasta <code>inbox/</code>.
+          </p>
         </div>
 
         <div class="settings-divider"></div>

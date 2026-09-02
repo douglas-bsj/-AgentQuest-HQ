@@ -31,20 +31,57 @@ Vá em **⚙️ Configurações → Contas & Provedores IA**.
 
 ---
 
-## 💬 Conectar o WhatsApp (requer Docker Desktop)
+## 💬 Conectar o WhatsApp
 
-O WhatsApp usa a Evolution API, que roda em containers Docker.
+Vá em **⚙️ Configurações → Canais de Mensageria** e escolha o tipo de conexão.
+São quatro opções, e a primeira **não exige instalar nada**:
 
-1. Instale o [Docker Desktop](https://www.docker.com/products/docker-desktop/) e deixe-o aberto.
-   *(Ele não é instalado junto com o AgentQuest — é um pré-requisito à parte.)*
-2. No painel, vá em **⚙️ Configurações → Canais de Mensageria**.
-3. O card de status no topo mostra a situação da conexão:
-   - 🔴 **Docker Desktop não encontrado** — instale pelo link exibido ali.
-   - 🟡 **Docker Desktop parado** — abra o Docker Desktop e clique em Conectar.
-   - 🟢 **Evolution API online** — clique em **"📡 Conectar WhatsApp"**.
-4. O **QR Code aparece na própria tela**: escaneie com o celular
+### 1. Conexão Direta por QR Code — padrão, sem Docker
+
+Funciona como o WhatsApp Web: você escaneia um QR Code e pronto. Não precisa de
+Docker, nem de virtualização, nem de conta Business. O Node.js necessário já vem
+embutido no instalador.
+
+1. Clique em **"📡 Conectar WhatsApp"**.
+2. O **QR Code aparece na própria tela**: escaneie com o celular
    (WhatsApp → Aparelhos conectados → Conectar um aparelho).
-5. O status muda para **🟢 WhatsApp conectado** automaticamente.
+3. O status muda para **🟢 WhatsApp conectado** sozinho.
+
+A sessão fica salva nesta máquina (pasta `whatsapp_session/`), então você só
+pareia de novo se desconectar. Envio e recebimento são automáticos.
+
+> ⚠️ Esta conexão usa uma biblioteca não oficial (a mesma que a Evolution API usa
+> internamente). Funciona bem para uso normal, mas envio em massa pode levar ao
+> bloqueio do número pelo WhatsApp. Para operação em escala, use a opção oficial.
+
+### 2. WhatsApp Cloud API Oficial (Meta) — produção
+
+Não instala nada: o WhatsApp roda na infraestrutura da Meta. Preencha:
+
+- **Phone Number ID** e **Access Token** — em Meta for Developers → seu App →
+  WhatsApp → Configuração da API
+- **Verify Token** — uma senha que você inventa e repete ao cadastrar o webhook
+
+Clique em **"🔍 Validar Credenciais"** para confirmar que estão certas.
+
+> ⚠️ Para **receber** mensagens, a Meta precisa alcançar este computador por um
+> endereço HTTPS público — numa instalação local isso exige expor a porta (túnel).
+> O **envio** funciona sem nenhuma exposição.
+>
+> Cadastre o webhook na Meta apontando para `SEU_ENDERECO/api/webhook/whatsapp`.
+
+### 3. Evolution API — requer Docker Desktop
+
+Só faz sentido se você já tem uma Evolution rodando. Exige
+[Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado e
+aberto, e o Docker precisa de virtualização habilitada na BIOS.
+A URL é configurável, então pode apontar para uma Evolution em outro servidor.
+
+### 4. Somente link wa.me — sem conexão nenhuma
+
+O sistema escreve a resposta e gera um link: você clica, confere e envia.
+Não conecta conta e não recebe mensagens automaticamente — para alimentar os
+agentes, exporte a conversa no WhatsApp e coloque o `.txt` na pasta `inbox/`.
 
 ---
 

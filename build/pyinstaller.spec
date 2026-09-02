@@ -15,6 +15,10 @@ datas = [
     ("vault_template", "vault_template"),
     ("docker-compose.evolution.yml", "."),
     (".env.example", "."),
+    # Ponte de WhatsApp (Baileys) e o Node portatil que a executa —
+    # permitem conectar o WhatsApp sem Docker e sem virtualizacao.
+    ("whatsapp-bridge", "whatsapp-bridge"),
+    ("node", "node"),
 ]
 
 # O ícone é copiado para o staging pelo build_release.py.

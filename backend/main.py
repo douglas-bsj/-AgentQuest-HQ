@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -363,13 +363,73 @@ def update_draft(mission_id: int, body: DraftUpdate, db: Session = Depends(get_d
     return mission
 
 
+@app.get("/api/webhook/whatsapp")
+def verify_whatsapp_webhook(request: Request):
+    """Verificação do webhook exigida pela Meta ao registrar a Cloud API.
+
+    A Meta chama esta URL com hub.verify_token e espera receber de volta o
+    hub.challenge em texto puro quando o token confere.
+    """
+    params = request.query_params
+    modo = params.get("hub.mode")
+    token = params.get("hub.verify_token")
+    challenge = params.get("hub.challenge")
+
+    esperado = (
+        settings_manager.get_settings()
+        .get("channels", {})
+        .get("whatsapp", {})
+        .get("meta_verify_token", "")
+    )
+
+    if modo == "subscribe" and token and token == esperado:
+        print("[WEBHOOK META] Verificação aceita.")
+        return PlainTextResponse(challenge or "")
+
+    print("[WEBHOOK META] Verificação recusada: token não confere.")
+    raise HTTPException(status_code=403, detail="Verify token inválido.")
+
+
 @app.post("/api/webhook/whatsapp")
 async def receive_whatsapp_webhook(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """Recebe mensagens em tempo real da Evolution API e dispara a orquestração dos agentes."""
+    """Recebe mensagens em tempo real do provedor de WhatsApp e dispara a
+    orquestração dos agentes.
+
+    Aceita dois formatos: o da Evolution API (também usado pela ponte Baileys,
+    que o imita de propósito) e o da Cloud API oficial da Meta.
+    """
     try:
         data = await request.json()
+
+        # ── Formato da Meta: entry[].changes[].value.messages[] ──
+        if data.get("object") == "whatsapp_business_account":
+            from backend.tools.meta_cloud_manager import parse_incoming
+
+            recebidas = parse_incoming(data)
+            if not recebidas:
+                return {"status": "ignored", "reason": "sem mensagens de texto no payload"}
+
+            def processar_meta(raw, remetente):
+                from backend.database import SessionLocal
+                bg_db = SessionLocal()
+                try:
+                    hermes_bridge.process_incoming_event(
+                        raw_text=raw, source="whatsapp", db=bg_db, sender_override=remetente
+                    )
+                finally:
+                    bg_db.close()
+
+            for m in recebidas:
+                print(f"[WEBHOOK META] Mensagem de {m['nome']} ({m['numero']}): {m['texto'][:60]}")
+                raw_event = f"Mensagem de {m['nome']} ({m['numero']}):\n{m['texto']}"
+                background_tasks.add_task(
+                    processar_meta, raw_event, f"{m['nome']} ({m['numero']})"
+                )
+
+            return {"status": "success", "processadas": len(recebidas)}
+
         print(f"\n[WHATSAPP WEBHOOK CHEGOU] Evento: {data.get('event')}")
-        
+
         # Estrutura padrão Evolution API v2: data['data']['message']
         event = data.get("event")
         message_data = data.get("data", {})

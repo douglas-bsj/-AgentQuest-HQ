@@ -111,6 +111,7 @@ agentquest-hq/
 │   ├── index.html          # Interface do usuário e modal de BI
 │   ├── style.css           # Estilos e gráficos
 │   └── app.js              # Lógica dos agentes e relatórios
+├── whatsapp-bridge/        # Ponte Node/Baileys — WhatsApp por QR Code, sem Docker
 ├── vault_template/         # Cofre limpo copiado para vault/ na primeira execução
 ├── build/                  # Spec do PyInstaller e script do Inno Setup
 ├── scripts/                # build_release.py — gera o instalador distribuível
@@ -131,9 +132,11 @@ Instala em `%LOCALAPPDATA%\Programs\AgentQuest HQ` (sem exigir administrador), c
 e aparece em "Aplicativos instalados" do Windows. Detalhes e passo a passo do WhatsApp em
 [`TESTING_GUIDE.md`](TESTING_GUIDE.md).
 
-> 💬 **WhatsApp:** requer o [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-> instalado à parte. O pareamento (QR Code) é feito dentro do próprio painel, em
-> **⚙️ Configurações → Canais de Mensageria**.
+> 💬 **WhatsApp:** o pareamento é feito dentro do próprio painel, em
+> **⚙️ Configurações → Canais de Mensageria**, escaneando um QR Code — sem Docker
+> e sem virtualização (o Node.js necessário vem embutido). Também é possível usar
+> a **Cloud API oficial da Meta**, a **Evolution API** (essa sim requer Docker) ou
+> o modo **link wa.me** para envio manual.
 
 ### Para desenvolvedores (a partir do código)
 ```bash

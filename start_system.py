@@ -60,6 +60,27 @@ def start_evolution_api(settings):
         print("[WhatsApp] AVISO: Evolution API nao respondeu a tempo (containers foram iniciados mesmo assim).")
 
 
+def start_whatsapp_bridge(settings):
+    """Sobe a ponte local de WhatsApp (Baileys/Node) quando esse e o provedor."""
+    wa_cfg = settings.get("channels", {}).get("whatsapp", {})
+    if not wa_cfg.get("enabled") or wa_cfg.get("provider") != "baileys":
+        return
+
+    from backend.tools.baileys_manager import start_bridge
+
+    print("[WhatsApp] Iniciando ponte local (Baileys, sem Docker)...")
+    resultado = start_bridge(ignore_groups=wa_cfg.get("ignore_groups", True))
+    status = resultado["status"]
+
+    if status in ("started", "already_running"):
+        print(f"[WhatsApp] {resultado['message']}")
+        print("[WhatsApp] Pareie o WhatsApp pela aba Canais do painel (QR Code).")
+    elif status == "node_missing":
+        print("[WhatsApp] AVISO: Node.js nao encontrado — a ponte de WhatsApp nao subiu.")
+    else:
+        print(f"[WhatsApp] AVISO: {resultado['message']}")
+
+
 def start_ollama_if_configured(settings):
     """Sobe o Ollama local em segundo plano, se o fallback local estiver ativo."""
     provider_cfg = settings.get("ai_providers", {})
@@ -88,6 +109,7 @@ def main():
     print()
 
     settings = load_settings()
+    start_whatsapp_bridge(settings)
     start_evolution_api(settings)
     start_ollama_if_configured(settings)
 

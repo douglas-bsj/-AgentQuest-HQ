@@ -1708,6 +1708,11 @@ function populateSettingsForm(s) {
       if (wa.api_token) document.getElementById('cfg-wa-token').value = wa.api_token;
       if (wa.webhook_url) document.getElementById('cfg-wa-webhook').value = wa.webhook_url;
       if (wa.ignore_groups !== undefined) document.getElementById('cfg-wa-ignore-groups').value = String(wa.ignore_groups);
+      if (wa.meta_phone_number_id) document.getElementById('cfg-wa-meta-phone-id').value = wa.meta_phone_number_id;
+      if (wa.meta_access_token) document.getElementById('cfg-wa-meta-token').value = wa.meta_access_token;
+      if (wa.meta_verify_token) document.getElementById('cfg-wa-meta-verify').value = wa.meta_verify_token;
+      if (wa.meta_api_version) document.getElementById('cfg-wa-meta-version').value = wa.meta_api_version;
+      toggleWhatsAppProviderFields();
     }
     if (s.channels.telegram) {
       const tg = s.channels.telegram;
@@ -1779,7 +1784,11 @@ async function saveAllSettings() {
         instance_name: document.getElementById('cfg-wa-instance').value,
         api_token: document.getElementById('cfg-wa-token').value,
         webhook_url: document.getElementById('cfg-wa-webhook').value,
-        ignore_groups: document.getElementById('cfg-wa-ignore-groups').value === 'true'
+        ignore_groups: document.getElementById('cfg-wa-ignore-groups').value === 'true',
+        meta_phone_number_id: document.getElementById('cfg-wa-meta-phone-id').value,
+        meta_access_token: document.getElementById('cfg-wa-meta-token').value,
+        meta_verify_token: document.getElementById('cfg-wa-meta-verify').value,
+        meta_api_version: document.getElementById('cfg-wa-meta-version').value || 'v21.0'
       },
       telegram: {
         enabled: true,
@@ -2348,6 +2357,58 @@ async function submitOnboarding() {
 
 let whatsappStatusPollTimer = null;
 
+function toggleWhatsAppProviderFields(trocaDoUsuario = false) {
+  const select = document.getElementById('cfg-wa-provider');
+  if (!select) return;
+  const provider = select.value;
+
+  const blocos = {
+    baileys: 'cfg-wa-fields-baileys',
+    meta_official: 'cfg-wa-fields-meta',
+    evolution: 'cfg-wa-fields-evolution',
+    mock: 'cfg-wa-fields-mock'
+  };
+
+  Object.entries(blocos).forEach(([nome, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = (nome === provider) ? 'block' : 'none';
+  });
+
+  // O botão de conectar só faz sentido em provedores que mantêm sessão
+  const btn = document.getElementById('btn-wa-connect');
+  if (btn) {
+    btn.style.display = (provider === 'mock') ? 'none' : 'inline-flex';
+    btn.innerHTML = (provider === 'meta_official')
+      ? '<span class="refresh-icon">🔍</span> Validar Credenciais'
+      : '<span class="refresh-icon">📡</span> Conectar WhatsApp';
+  }
+
+  // Só Baileys e Evolution pareiam por QR — ao trocar de provedor, o QR
+  // exibido antes deixa de fazer sentido e some junto com o polling.
+  if (provider !== 'baileys' && provider !== 'evolution') {
+    const qrBox = document.getElementById('wa-qr-box');
+    if (qrBox) qrBox.style.display = 'none';
+    if (whatsappStatusPollTimer) {
+      clearInterval(whatsappStatusPollTimer);
+      whatsappStatusPollTimer = null;
+    }
+  }
+
+  // O endpoint de status responde pelo provedor SALVO. Se o usuário acabou de
+  // trocar o select e ainda não salvou, mostrar o status antigo enganaria —
+  // então pedimos para salvar em vez de exibir dado de outro provedor.
+  const salvo = (globalSettings?.channels?.whatsapp?.provider) || null;
+  const dotEl = document.getElementById('wa-status-dot');
+  const labelEl = document.getElementById('wa-status-label');
+
+  if (trocaDoUsuario && salvo && salvo !== provider) {
+    if (dotEl) dotEl.className = 'status-pulse-dot warning';
+    if (labelEl) labelEl.textContent = '⚠️ Salve as configurações para aplicar este provedor';
+  } else if (dotEl) {
+    setTimeout(() => checkWhatsAppStatus(), 50);
+  }
+}
+
 async function checkWhatsAppStatus() {
   const dotEl = document.getElementById('wa-status-dot');
   const labelEl = document.getElementById('wa-status-label');
@@ -2363,32 +2424,71 @@ async function checkWhatsAppStatus() {
 
   try {
     const res = await API.getWhatsAppStatus();
+    const provider = res.provider || 'baileys';
 
-    if (dockerWarning) dockerWarning.style.display = (!res.docker_installed || !res.docker_running) ? 'block' : 'none';
-    if (connectBtn) connectBtn.disabled = !res.docker_installed || !res.docker_running;
+    // O aviso de Docker só se aplica ao provedor Evolution
+    const faltaDocker = provider === 'evolution' && (!res.docker_installed || !res.docker_running);
+    if (dockerWarning) dockerWarning.style.display = faltaDocker ? 'block' : 'none';
+    if (connectBtn) connectBtn.disabled = faltaDocker;
 
-    let statusClass = 'error';
-    let label = '🔴 Docker Desktop não encontrado';
+    let statusClass = 'warning';
+    let label = '🟡 Verificando...';
 
-    if (!res.docker_installed) {
-      statusClass = 'error';
-      label = '🔴 Docker Desktop não encontrado';
-    } else if (!res.docker_running) {
-      statusClass = 'warning';
-      label = '🟡 Docker Desktop parado';
-    } else if (!res.evolution_reachable) {
-      statusClass = 'warning';
-      label = '🟡 Evolution API iniciando...';
-    } else if (res.instance_state === 'open') {
+    if (provider === 'mock') {
       statusClass = 'online';
-      label = '🟢 WhatsApp conectado';
+      label = '🟢 Modo link wa.me — envio manual em 1 clique';
       if (qrBox) qrBox.style.display = 'none';
-    } else if (res.instance_state === 'connecting') {
-      statusClass = 'warning';
-      label = '🟠 Aguardando pareamento (escaneie o QR Code)';
+    } else if (provider === 'meta_official') {
+      if (res.instance_state === 'open') {
+        statusClass = 'online';
+        const num = res.connected_number ? ` (${res.connected_number})` : '';
+        label = `🟢 Conectado via Meta Cloud API${num}`;
+      } else {
+        statusClass = 'error';
+        label = '🔴 Credenciais da Meta não validadas';
+      }
+      if (qrBox) qrBox.style.display = 'none';
+    } else if (provider === 'baileys') {
+      if (!res.node_installed) {
+        statusClass = 'error';
+        label = '🔴 Node.js não encontrado — ponte indisponível';
+      } else if (!res.bridge_running) {
+        statusClass = 'warning';
+        label = '🟡 Ponte de WhatsApp parada — clique em Conectar';
+      } else if (res.instance_state === 'open') {
+        statusClass = 'online';
+        const num = res.connected_number ? ` (${res.connected_number})` : '';
+        label = `🟢 WhatsApp conectado${num}`;
+        if (qrBox) qrBox.style.display = 'none';
+      } else if (res.instance_state === 'connecting') {
+        statusClass = 'warning';
+        label = '🟠 Aguardando pareamento — escaneie o QR Code';
+      } else {
+        statusClass = 'warning';
+        label = '🟡 Ponte ativa, sem conta pareada — clique em Conectar';
+      }
     } else {
-      statusClass = 'online';
-      label = '🟢 Evolution API online — clique em Conectar';
+      // Evolution
+      if (!res.docker_installed) {
+        statusClass = 'error';
+        label = '🔴 Docker Desktop não encontrado';
+      } else if (!res.docker_running) {
+        statusClass = 'warning';
+        label = '🟡 Docker Desktop parado';
+      } else if (!res.evolution_reachable) {
+        statusClass = 'warning';
+        label = '🟡 Evolution API iniciando...';
+      } else if (res.instance_state === 'open') {
+        statusClass = 'online';
+        label = '🟢 WhatsApp conectado';
+        if (qrBox) qrBox.style.display = 'none';
+      } else if (res.instance_state === 'connecting') {
+        statusClass = 'warning';
+        label = '🟠 Aguardando pareamento (escaneie o QR Code)';
+      } else {
+        statusClass = 'online';
+        label = '🟢 Evolution API online — clique em Conectar';
+      }
     }
 
     dotEl.className = 'status-pulse-dot ' + statusClass;

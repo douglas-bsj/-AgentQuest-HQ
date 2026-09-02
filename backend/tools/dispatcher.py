@@ -134,7 +134,37 @@ class ActionDispatcher:
         clean_phone = "".join(c for c in destination if c.isdigit())
         wa_link = f"https://wa.me/{clean_phone}?text={encoded_text}" if clean_phone else f"https://wa.me/?text={encoded_text}"
 
-        # Tenta envio automático via Evolution API se configurado
+        # ── Provedor: ponte local Baileys (Node, sem Docker) ──
+        if provider == "baileys" and clean_phone:
+            from backend.tools import baileys_manager
+            res = baileys_manager.send_text(clean_phone, message_text)
+            if res.get("status") == "sent":
+                print(f"[DISPATCH BAILEYS] Mensagem enviada para {clean_phone}!")
+                return {
+                    "status": "sent",
+                    "channel": "whatsapp",
+                    "method": res.get("method", "Baileys"),
+                    "destination": clean_phone,
+                    "wa_link": wa_link,
+                }
+            print(f"[DISPATCH BAILEYS] {res.get('message', 'falha no envio')}")
+
+        # ── Provedor: WhatsApp Cloud API oficial da Meta ──
+        if provider == "meta_official" and clean_phone:
+            from backend.tools import meta_cloud_manager
+            res = meta_cloud_manager.send_text(settings, clean_phone, message_text)
+            if res.get("status") == "sent":
+                print(f"[DISPATCH META] Mensagem enviada para {clean_phone}!")
+                return {
+                    "status": "sent",
+                    "channel": "whatsapp",
+                    "method": res.get("method", "Meta Cloud API"),
+                    "destination": clean_phone,
+                    "wa_link": wa_link,
+                }
+            print(f"[DISPATCH META] {res.get('message', 'falha no envio')}")
+
+        # ── Provedor: Evolution API (Docker) ──
         if provider == "evolution" and api_url and api_token and clean_phone:
             try:
                 # Endpoint padrão da Evolution API v2: POST /message/sendText/{instance}

@@ -44,12 +44,24 @@ DEFAULT_SETTINGS = {
     "channels": {
         "whatsapp": {
             "enabled": True,
-            "provider": "evolution",  # evolution, zapi, twilio, mock
+            # baileys: ponte local Node (sem Docker) — recomendado para testes
+            # meta_official: WhatsApp Cloud API oficial da Meta — producao
+            # evolution: Evolution API via Docker
+            # mock: apenas gera link wa.me para envio manual
+            "provider": "baileys",
+            "ignore_groups": True,
+
+            # Evolution API (Docker)
             "api_url": "http://localhost:8080",
             "instance_name": "agentquest",
             "api_token": "agentquest-secreto-123",
             "webhook_url": "http://host.docker.internal:8000/api/webhook/whatsapp",
-            "ignore_groups": True
+
+            # WhatsApp Cloud API oficial da Meta
+            "meta_phone_number_id": "",
+            "meta_access_token": "",
+            "meta_verify_token": "agentquest-webhook",
+            "meta_api_version": "v21.0",
         },
         "telegram": {
             "enabled": True,
