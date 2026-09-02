@@ -3,14 +3,21 @@ AgentQuest HQ - Runner
 Inicializa o servidor FastAPI e abre o navegador automaticamente em uma porta livre.
 """
 
+import json
 import socket
 import webbrowser
 import threading
+import urllib.request
 import uvicorn
 import os
 import time
 
+# Host de escuta: 0.0.0.0 aceita conexões de qualquer interface (permite acessar
+# o painel de outro dispositivo da rede local).
 DEFAULT_HOST = "0.0.0.0"
+# Host de navegação: 0.0.0.0 NÃO é um endereço navegável — o navegador responde
+# ERR_ADDRESS_INVALID. Toda URL exibida ou aberta usa este host.
+BROWSE_HOST = "localhost"
 DEFAULT_PREFERRED_PORT = 8000
 
 
@@ -33,10 +40,41 @@ def _open_browser(url):
     print(f"\n[OK] Navegador aberto com sucesso em {url}")
 
 
+def find_running_instance(start_port=8000, max_attempts=5):
+    """Procura uma instancia do AgentQuest HQ ja no ar e retorna a porta dela.
+
+    Evita subir um segundo servidor quando o atalho e clicado com o app ja
+    rodando (por exemplo, iniciado junto com o Windows) — duas instancias
+    disputariam o mesmo banco e o mesmo cofre.
+    """
+    for port in range(start_port, start_port + max_attempts):
+        try:
+            with urllib.request.urlopen(f"http://{BROWSE_HOST}:{port}/api/stats", timeout=1) as resp:
+                if resp.status == 200:
+                    payload = json.loads(resp.read().decode("utf-8"))
+                    if all(k in payload for k in ("pending", "approved", "rejected")):
+                        return port
+        except Exception:
+            continue
+    return None
+
+
 def start_backend(host=DEFAULT_HOST, preferred_port=DEFAULT_PREFERRED_PORT, open_browser_tab=True):
     """Inicia o servidor FastAPI, escolhendo uma porta livre e abrindo o painel no navegador."""
+    ja_rodando = find_running_instance(preferred_port)
+    if ja_rodando:
+        url = f"http://{BROWSE_HOST}:{ja_rodando}"
+        print("=" * 60)
+        print("  AgentQuest HQ ja esta em execucao")
+        print("=" * 60)
+        print(f"  Abrindo o painel existente em {url}")
+        print("=" * 60)
+        if open_browser_tab:
+            webbrowser.open(url)
+        return
+
     port = find_free_port(host, preferred_port)
-    url = f"http://{host}:{port}"
+    url = f"http://{BROWSE_HOST}:{port}"
 
     print("=" * 60)
     print("  AgentQuest HQ - Servidor Local")

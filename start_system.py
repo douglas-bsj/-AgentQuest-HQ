@@ -10,12 +10,12 @@ Uso:
     python start_system.py
 """
 
-import json
 import os
 import shutil
 import subprocess
 
 from backend.utils.paths import base_path
+from backend.tools.settings_manager import settings_manager
 from backend.tools.evolution_manager import (
     start_evolution_stack,
     wait_for_evolution_api,
@@ -25,11 +25,12 @@ SETTINGS_PATH = base_path("settings.json")
 
 
 def load_settings():
+    """Usa o settings_manager (que faz merge com os padroes do sistema) em vez de
+    ler o JSON cru: numa instalacao nova o settings.json ainda nao existe, e ler
+    o arquivo direto faria o WhatsApp ser pulado no boot mesmo com Docker pronto."""
     if not os.path.exists(SETTINGS_PATH):
-        print("[Config] settings.json nao encontrado - usando padroes (WhatsApp/IA local desabilitados).")
-        return {}
-    with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+        print("[Config] Primeira execucao - usando as configuracoes padrao do sistema.")
+    return settings_manager.get_settings()
 
 
 def start_evolution_api(settings):
