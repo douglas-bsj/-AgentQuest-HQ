@@ -24,7 +24,7 @@ class HermesOrchestrator:
         self.planner = PlannerAgent()
         self.reviewer = ReviewerAgent()
 
-    def process_incoming_event(self, raw_text: str, source: str = "whatsapp", db=None, sender_override: str = None):
+    def process_incoming_event(self, raw_text: str, source: str = "whatsapp", db=None, sender_override: str = None, reply_to: str = None):
         """
         Recebe a mensagem bruta, realiza mineração de memória e cria a missão PENDENTE 
         sem acionar a IA (para economia de tokens).
@@ -60,7 +60,8 @@ class HermesOrchestrator:
                 channel=channel_label,
                 response="",  # Vazio indicando que a IA ainda não gerou resposta
                 received_message=raw_text,
-                status="pending"
+                status="pending",
+                reply_to=reply_to,
             )
             db.add(new_mission)
             db.commit()

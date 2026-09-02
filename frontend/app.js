@@ -434,19 +434,54 @@ function updateAgentState(agentId, newStatus) {
   }
 }
 
+// Momento da última atividade real de cada agente, alimentado pelo feed do
+// servidor. Antes esta animação era uma lista fixa de temporizadores: mostrava
+// "processando" em agentes parados e nada nos que estavam realmente
+// trabalhando — informação decorativa e enganosa.
+const ultimaAtividadeAgente = {};
+const JANELA_PROCESSANDO_MS = 12000;
+
+// O feed identifica o agente pelo nome exibido; o badge, pelo id.
+const NOME_AGENTE_PARA_ID = {
+  'hermes': 'hermes',
+  'hermes (recepção)': 'atendente',
+  'atendente': 'atendente',
+  'administrativo': 'admin',
+  'financeiro': 'financeiro',
+  'comercial': 'comercial',
+  'jurídico lgpd': 'juridico',
+  'juridico lgpd': 'juridico',
+  'planejador': 'planejador',
+  'revisor': 'revisor'
+};
+
+function idDoAgentePeloNome(nome) {
+  if (!nome) return null;
+  const chave = String(nome).toLowerCase().trim();
+  if (NOME_AGENTE_PARA_ID[chave]) return NOME_AGENTE_PARA_ID[chave];
+  // "Hermes — Gerando resposta", "Financeiro (Cobranças)" etc.
+  for (const [n, id] of Object.entries(NOME_AGENTE_PARA_ID)) {
+    if (chave.startsWith(n)) return id;
+  }
+  return null;
+}
+
+function registrarAtividadeDeAgente(nomeAgente) {
+  const id = idDoAgentePeloNome(nomeAgente);
+  if (id) ultimaAtividadeAgente[id] = Date.now();
+}
+
 function startAgentStatusCycle() {
-  const schedule = [
-    [2500, 'atendente', 'ativo'],
-    [4500, 'comercial', 'ativo'],
-    [7000, 'financeiro', 'processando'],
-    [9500, 'planejador', 'processando'],
-    [13000, 'financeiro', 'ativo'],
-    [16000, 'planejador', 'ativo'],
-    [19000, 'atendente', 'processando']
-  ];
-  schedule.forEach(([delay, id, status]) => {
-    setTimeout(() => updateAgentState(id, status), delay);
-  });
+  // Reflete o estado real: um agente aparece como "processando" enquanto houver
+  // atividade dele no feed dentro da janela recente; fora disso, volta a "ativo".
+  setInterval(() => {
+    const agora = Date.now();
+    SQUAD_AGENTS.forEach(a => {
+      const visto = ultimaAtividadeAgente[a.id];
+      const processando = visto && (agora - visto) < JANELA_PROCESSANDO_MS;
+      updateAgentState(a.id, processando ? 'processando' : 'ativo');
+    });
+  }, 1500);
 }
 
 function addMissionCard(data) {
@@ -853,6 +888,9 @@ function startFeedLoop() {
               agent: item.agent_name,
               text: item.text
             });
+            // Marca o agente como em atividade — o badge do squad passa a
+            // refletir o que está realmente acontecendo
+            registrarAtividadeDeAgente(item.agent_name);
           }
         });
       }

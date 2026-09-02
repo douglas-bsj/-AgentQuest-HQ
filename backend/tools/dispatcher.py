@@ -131,13 +131,24 @@ class ActionDispatcher:
         
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         encoded_text = urllib.parse.quote(message_text)
-        clean_phone = "".join(c for c in destination if c.isdigit())
-        wa_link = f"https://wa.me/{clean_phone}?text={encoded_text}" if clean_phone else f"https://wa.me/?text={encoded_text}"
+
+        # O destino pode ser um telefone ou o JID completo da conversa
+        # (ex: "215779...@lid"). O JID precisa ser preservado inteiro: reduzir a
+        # dígitos e remontar como telefone enviava a resposta para o vazio.
+        destino_e_jid = "@" in destination
+        clean_phone = "".join(c for c in destination.split("@")[0] if c.isdigit())
+
+        # O link wa.me só funciona com telefone real (até 15 dígitos)
+        telefone_valido = clean_phone if 0 < len(clean_phone) <= 15 else ""
+        wa_link = (
+            f"https://wa.me/{telefone_valido}?text={encoded_text}"
+            if telefone_valido else f"https://wa.me/?text={encoded_text}"
+        )
 
         # ── Provedor: ponte local Baileys (Node, sem Docker) ──
-        if provider == "baileys" and clean_phone:
+        if provider == "baileys" and (destino_e_jid or clean_phone):
             from backend.tools import baileys_manager
-            res = baileys_manager.send_text(clean_phone, message_text)
+            res = baileys_manager.send_text(destination if destino_e_jid else clean_phone, message_text)
             if res.get("status") == "sent":
                 print(f"[DISPATCH BAILEYS] Mensagem enviada para {clean_phone}!")
                 return {
@@ -147,7 +158,8 @@ class ActionDispatcher:
                     "destination": clean_phone,
                     "wa_link": wa_link,
                 }
-            print(f"[DISPATCH BAILEYS] {res.get('message', 'falha no envio')}")
+            falha_envio = res.get("message", "falha no envio")
+            print(f"[DISPATCH BAILEYS] {falha_envio}")
 
         # ── Provedor: WhatsApp Cloud API oficial da Meta ──
         if provider == "meta_official" and clean_phone:

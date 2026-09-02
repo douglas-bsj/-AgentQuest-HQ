@@ -172,7 +172,7 @@ def list_missions(status: str = "pending", db: Session = Depends(get_db)):
     return db.query(Mission).filter(Mission.status == status).order_by(Mission.created_at.desc()).all()
 
 
-@app.post("/api/missions/{mission_id}/approve", response_model=MissionOut)
+@app.post("/api/missions/{mission_id}/approve")
 def approve_mission(mission_id: int, db: Session = Depends(get_db)):
     """Aprova uma missão: muda status para 'approved' e registra no histórico."""
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
@@ -224,18 +224,24 @@ def approve_mission(mission_id: int, db: Session = Depends(get_db)):
         print(f"[OBSIDIAN] Erro ao sincronizar cofre: {e}")
 
     # ── Execução Real do Disparo (E-mail, Telegram, WhatsApp, outputs/) ──
+    dispatch_result = None
     try:
-        # Se for WhatsApp, garante que o número limpo é passado como destino
+        # Destino do WhatsApp: usa o endereço exato de onde a mensagem veio.
+        # O título só serve de reserva para missões antigas (criadas antes de
+        # existir o campo reply_to) — extrair dígitos do título falha quando o
+        # remetente chega como LID, que não é um número de telefone.
         dest = client_name
         if mission.source == "whatsapp":
-            import re
-            phone_match = re.search(r'\((\d+)\)', mission.title)
-            if phone_match:
-                dest = phone_match.group(1)
+            if mission.reply_to:
+                dest = mission.reply_to
             else:
-                digits = re.sub(r'\D', '', mission.title)
-                if len(digits) >= 10:
-                    dest = digits
+                phone_match = re.search(r'\((\d+)\)', mission.title)
+                if phone_match:
+                    dest = phone_match.group(1)
+                else:
+                    digits = re.sub(r'\D', '', mission.title)
+                    if len(digits) >= 10:
+                        dest = digits
 
         dispatch_result = action_dispatcher.dispatch(
             source=mission.source,
@@ -246,8 +252,14 @@ def approve_mission(mission_id: int, db: Session = Depends(get_db)):
         print(f"[DISPATCH] Resultado da missão #{mission.id}: {dispatch_result}")
     except Exception as e:
         print(f"[DISPATCH] Erro no disparo da ação: {e}")
+        dispatch_result = {"status": "error", "message": str(e)}
 
-    return mission
+    # O resultado do disparo vai junto na resposta: antes o painel anunciava
+    # "despachada com sucesso" sem saber se a mensagem havia saído de fato.
+    return {
+        "mission": MissionOut.model_validate(mission, from_attributes=True).model_dump(),
+        "dispatch": dispatch_result or {"status": "unknown"},
+    }
 
 
 @app.post("/api/missions/{mission_id}/restore", response_model=MissionOut)
@@ -543,21 +555,27 @@ async def receive_whatsapp_webhook(request: Request, background_tasks: Backgroun
         raw_event = f"Mensagem de {sender_name} ({sender_phone}):\n{text}"
         
         # Processa através da ponte de agentes Hermes em background para não dar timeout no Evolution API
-        def process_background(raw, source, s_override):
+        def process_background(raw, source, s_override, jid_resposta=None):
             # Usar uma nova sessao de banco para a thread em background
             from backend.database import SessionLocal
             bg_db = SessionLocal()
             try:
                 hermes_bridge.process_incoming_event(
-                    raw_text=raw, 
-                    source=source, 
+                    raw_text=raw,
+                    source=source,
                     db=bg_db,
-                    sender_override=s_override
+                    sender_override=s_override,
+                    reply_to=jid_resposta,
                 )
             finally:
                 bg_db.close()
 
-        background_tasks.add_task(process_background, raw_event, "whatsapp", f"{sender_name} ({sender_phone})")
+        # Guarda o JID exato da conversa: o WhatsApp usa LIDs que não são
+        # telefone, e reconstruir o destino pelos dígitos enviava a resposta
+        # para um endereço inexistente.
+        background_tasks.add_task(
+            process_background, raw_event, "whatsapp", f"{sender_name} ({sender_phone})", remote_jid
+        )
         
         return {
             "status": "success",

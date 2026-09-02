@@ -86,17 +86,56 @@ function classificarJid(jid) {
   return "desconhecido";
 }
 
+/**
+ * Extrai o conteudo textual de uma mensagem.
+ *
+ * Midia sem legenda (o caso mais comum: PDF, foto ou audio enviados sozinhos)
+ * antes retornava vazio e a mensagem era descartada aqui, sem nunca chegar ao
+ * AgentQuest — que ja sabe tratar documentos. Agora gera um marcador com o tipo
+ * e o nome do arquivo, para a demanda virar missao.
+ */
 function extrairTexto(msg) {
   const m = msg.message;
   if (!m) return "";
-  return (
-    m.conversation ||
-    m.extendedTextMessage?.text ||
-    m.imageMessage?.caption ||
-    m.videoMessage?.caption ||
-    m.documentMessage?.caption ||
-    ""
-  );
+
+  // Alguns tipos vem embrulhados
+  const conteudo =
+    m.ephemeralMessage?.message ||
+    m.viewOnceMessage?.message ||
+    m.viewOnceMessageV2?.message ||
+    m.documentWithCaptionMessage?.message ||
+    m;
+
+  const textoDireto =
+    conteudo.conversation ||
+    conteudo.extendedTextMessage?.text ||
+    conteudo.imageMessage?.caption ||
+    conteudo.videoMessage?.caption ||
+    conteudo.documentMessage?.caption ||
+    "";
+
+  if (textoDireto && textoDireto.trim()) return textoDireto;
+
+  // Midia sem legenda: descreve o anexo em vez de descartar
+  if (conteudo.documentMessage) {
+    const doc = conteudo.documentMessage;
+    const nome = doc.fileName || "documento";
+    return `[Documento recebido via WhatsApp: ${nome}]`;
+  }
+  if (conteudo.imageMessage) return "[Imagem/Foto recebida via WhatsApp]";
+  if (conteudo.videoMessage) return "[Vídeo recebido via WhatsApp]";
+  if (conteudo.audioMessage) {
+    return conteudo.audioMessage.ptt
+      ? "[Mensagem de voz recebida via WhatsApp]"
+      : "[Áudio recebido via WhatsApp]";
+  }
+  if (conteudo.contactMessage || conteudo.contactsArrayMessage) return "[Contato compartilhado via WhatsApp]";
+  if (conteudo.locationMessage) return "[Localização recebida via WhatsApp]";
+
+  // Figurinhas e reações não são demandas de atendimento
+  if (conteudo.stickerMessage || conteudo.reactionMessage) return "";
+
+  return "";
 }
 
 async function conectar() {
@@ -248,15 +287,62 @@ const servidor = http.createServer(async (req, res) => {
     }
     try {
       const corpo = await lerCorpo(req);
-      const numero = String(corpo.number || "").replace(/\D/g, "");
+      const destinoBruto = String(corpo.number || "").trim();
       const texto = String(corpo.text || "");
-      if (!numero || !texto) {
+      if (!destinoBruto || !texto) {
         return responder(res, 400, { status: "error", message: "Informe 'number' e 'text'." });
       }
-      const jid = `${numero}@s.whatsapp.net`;
-      await sock.sendMessage(jid, { text: texto });
-      log(`Mensagem enviada para ${numero}.`);
-      return responder(res, 200, { status: "sent", destination: numero });
+
+      // Se veio o JID completo (ex: "215779...@lid"), usa como esta. O WhatsApp
+      // identifica muitos contatos por LID, que NAO e telefone — montar
+      // "<digitos>@s.whatsapp.net" nesses casos envia para um endereco
+      // inexistente, e o Baileys aceita sem erro (falso sucesso).
+      let jid;
+      if (destinoBruto.includes("@")) {
+        jid = destinoBruto;
+      } else {
+        const numero = destinoBruto.replace(/\D/g, "");
+        if (!numero) {
+          return responder(res, 400, { status: "error", message: "Destino invalido." });
+        }
+        if (numero.length > 15) {
+          return responder(res, 400, {
+            status: "error",
+            message: `Destino '${numero}' tem ${numero.length} digitos e nao e um telefone valido — informe o JID completo.`,
+          });
+        }
+
+        // Confirma com o WhatsApp que o numero existe antes de enviar. Sem esta
+        // checagem, um LID tratado como telefone virava
+        // "<digitos>@s.whatsapp.net", o Baileys aceitava sem reclamar e a
+        // mensagem sumia — o painel dizia "enviado" e nada chegava.
+        try {
+          const encontrados = await sock.onWhatsApp(numero);
+          if (!encontrados || !encontrados.length || !encontrados[0]?.exists) {
+            return responder(res, 404, {
+              status: "error",
+              message: `O numero ${numero} nao existe no WhatsApp (pode ser um LID, nao um telefone). Responda pela conversa original.`,
+            });
+          }
+          jid = encontrados[0].jid;
+        } catch (e) {
+          return responder(res, 502, {
+            status: "error",
+            message: `Nao foi possivel validar o destino ${numero}: ${e.message}`,
+          });
+        }
+      }
+
+      const retorno = await sock.sendMessage(jid, { text: texto });
+      if (!retorno || !retorno.key) {
+        return responder(res, 502, {
+          status: "error",
+          message: `O WhatsApp nao confirmou a entrega para ${jid}.`,
+        });
+      }
+
+      log(`Mensagem enviada para ${jid} (id ${retorno.key.id}).`);
+      return responder(res, 200, { status: "sent", destination: jid, message_id: retorno.key.id });
     } catch (e) {
       return responder(res, 500, { status: "error", message: e.message });
     }
