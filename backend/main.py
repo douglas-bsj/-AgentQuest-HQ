@@ -4,6 +4,7 @@ Servidor REST local que alimenta o painel web com dados reais do SQLite.
 """
 
 import os
+import re
 import datetime
 from contextlib import asynccontextmanager
 
@@ -363,6 +364,30 @@ def update_draft(mission_id: int, body: DraftUpdate, db: Session = Depends(get_d
     return mission
 
 
+def classificar_remetente(jid: str) -> str:
+    """Classifica o remetente de uma mensagem de WhatsApp pelo JID.
+
+    Checar apenas "@g.us" nao era suficiente: grupos e canais no formato novo
+    chegam com IDs de 18 digitos e outros sufixos (@newsletter, @lid), e
+    passavam pelo filtro como se fossem conversa individual. A regra aqui e
+    invertida — so vale como pessoa o que comprovadamente e pessoa.
+    """
+    if not jid:
+        return "desconhecido"
+    if jid.endswith("@g.us"):
+        return "grupo"
+    if jid.endswith("@newsletter"):
+        return "canal"
+    if jid == "status@broadcast" or jid.endswith("@broadcast"):
+        return "transmissao"
+    if jid.endswith("@s.whatsapp.net") or jid.endswith("@lid"):
+        numero = re.sub(r"\D", "", jid.split("@")[0])
+        # Telefones tem no maximo 15 digitos (padrao E.164); acima disso e
+        # identificador de grupo/canal
+        return "grupo" if len(numero) > 15 else "individual"
+    return "desconhecido"
+
+
 @app.get("/api/webhook/whatsapp")
 def verify_whatsapp_webhook(request: Request):
     """Verificação do webhook exigida pela Meta ao registrar a Cloud API.
@@ -455,15 +480,18 @@ async def receive_whatsapp_webhook(request: Request, background_tasks: Backgroun
                         print(f"[AUTO-APROVAÇÃO] Missão #{m.id} fechada pois o humano respondeu via celular.")
             return {"status": "success", "reason": "auto_approved_on_human_reply"}
 
-        # Verifica filtro de grupos
+        # Filtro de grupos, canais e transmissões
         remote_jid = key_info.get("remoteJid", "")
-        is_group = "@g.us" in remote_jid or "-" in remote_jid.split("@")[0]
-        
+        tipo_remetente = classificar_remetente(remote_jid)
+
+        if tipo_remetente == "transmissao":
+            return {"status": "ignored", "reason": "status_broadcast"}
+
         cfg = settings_manager.get_settings().get("channels", {}).get("whatsapp", {})
         ignore_groups = cfg.get("ignore_groups", True)
-        if is_group and ignore_groups:
-            print(f"[WHATSAPP WEBHOOK] Ignorando mensagem de GRUPO ({remote_jid}) conforme configurado.")
-            return {"status": "ignored", "reason": "group_message_ignored"}
+        if ignore_groups and tipo_remetente != "individual":
+            print(f"[WHATSAPP WEBHOOK] Ignorando mensagem de {tipo_remetente.upper()} ({remote_jid}) conforme configurado.")
+            return {"status": "ignored", "reason": f"{tipo_remetente}_ignorado"}
 
         # Extrai texto ou legenda de mídia (vídeo, foto, áudio, documento)
         msg = message_data.get("message", {})

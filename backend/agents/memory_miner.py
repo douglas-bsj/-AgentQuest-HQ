@@ -82,26 +82,18 @@ Responda ESTRITAMENTE em formato JSON com esta estrutura:
 
         result_data = {"facts": [], "unknown_terms": []}
 
-        if self.client:
-            try:
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": "Você é um extrator de fatos e entidades analítico e preciso. Responda apenas JSON válido."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.2,
-                    max_tokens=1500
-                )
-                raw_response = response.choices[0].message.content
-                # Limpa blocos de código markdown se houver
-                clean_json = re.sub(r"^```json\s*", "", raw_response.strip())
-                clean_json = re.sub(r"```$", "", clean_json.strip())
-                result_data = json.loads(clean_json)
-            except Exception as e:
-                print(f"[MEMORY MINER ERROR] {e}. Usando extração local de fallback.")
-                result_data = self._fallback_extraction(raw_text, source_person)
+        # Cliente compartilhado: se o provedor de nuvem falhar, a IA Local
+        # (Ollama) assume antes de recorrer à extração heurística.
+        from backend.agents.ai_client import chat_json
+
+        dados, erro = chat_json(
+            "Você é um extrator de fatos e entidades analítico e preciso. Responda apenas JSON válido.",
+            prompt,
+        )
+        if dados and not erro:
+            result_data = dados
         else:
+            print(f"[MEMORY MINER] IA indisponível ({str(erro)[:120]}). Usando extração local de fallback.")
             result_data = self._fallback_extraction(raw_text, source_person)
 
         # Salva os fatos no banco e no Obsidian

@@ -64,6 +64,28 @@ async function encaminharParaAgentQuest(payload) {
   }
 }
 
+/**
+ * Classifica o remetente pelo JID.
+ *
+ * Filtrar apenas "@g.us" nao basta: o WhatsApp entrega grupos, canais
+ * (newsletter), listas de transmissao e comunidades com sufixos diferentes, e
+ * todos apareciam como se fossem conversa individual. Aqui a regra e invertida:
+ * so e tratado como pessoa aquilo que comprovadamente e pessoa.
+ */
+function classificarJid(jid) {
+  if (!jid) return "desconhecido";
+  if (jid.endsWith("@g.us")) return "grupo";
+  if (jid.endsWith("@newsletter")) return "canal";
+  if (jid.endsWith("@broadcast") || jid === "status@broadcast") return "transmissao";
+  if (jid.endsWith("@s.whatsapp.net") || jid.endsWith("@lid")) {
+    // IDs de 18 digitos nao sao telefone: sao grupos/canais no formato novo
+    const numero = jid.split("@")[0].replace(/\D/g, "");
+    if (numero.length > 15) return "grupo";
+    return "individual";
+  }
+  return "desconhecido";
+}
+
 function extrairTexto(msg) {
   const m = msg.message;
   if (!m) return "";
@@ -144,15 +166,21 @@ async function conectar() {
       if (msg.key.fromMe) continue;
 
       const remoteJid = msg.key.remoteJid || "";
-      const ehGrupo = remoteJid.endsWith("@g.us");
-      if (ehGrupo && IGNORE_GROUPS) continue;
-      if (remoteJid === "status@broadcast") continue;
+      const tipo = classificarJid(remoteJid);
+
+      // Transmissoes/status nunca sao demandas de atendimento
+      if (tipo === "transmissao") continue;
+
+      if (IGNORE_GROUPS && tipo !== "individual") {
+        log(`Ignorada mensagem de ${tipo} (${remoteJid}) conforme configuracao.`);
+        continue;
+      }
 
       const texto = extrairTexto(msg);
       if (!texto.trim()) continue;
 
       const numero = remoteJid.split("@")[0];
-      log(`Mensagem recebida de ${numero}: "${texto.slice(0, 60)}"`);
+      log(`Mensagem recebida [${tipo}] de ${numero} (${remoteJid}): "${texto.slice(0, 60)}"`);
 
       // Formato compativel com o webhook que o AgentQuest ja recebe da Evolution
       await encaminharParaAgentQuest({

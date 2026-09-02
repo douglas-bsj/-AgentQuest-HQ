@@ -40,8 +40,19 @@ class NousHermesAgent:
 
     def invoke(self, user_message, expect_json=False):
         """
-        Envia uma mensagem ao Nous Hermes via OpenRouter / OpenAI API compatível.
+        Envia a mensagem ao provedor configurado, com contingência automática
+        para a IA Local (Ollama) quando a nuvem falha.
         """
+        # Caminho preferencial: cliente compartilhado, que já embute o fallback.
+        from backend.agents.ai_client import chat
+
+        texto, erro = chat(self.system_prompt, user_message)
+        if texto and not erro:
+            return self._parse_json(texto) if expect_json else texto
+
+        print(f"[HERMES] IA indisponível ({str(erro)[:120]}).")
+
+        # Caminho legado: cliente OpenRouter direto, caso esteja configurado
         client, model_name = self._get_client()
         if not client:
             return self._fallback(user_message, expect_json)

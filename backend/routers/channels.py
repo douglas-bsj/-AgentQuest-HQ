@@ -89,6 +89,20 @@ def whatsapp_connect():
     }
 
 
+@router.get("/whatsapp/qr")
+def whatsapp_qr():
+    """Devolve o QR atual sem iniciar nada — chamado em ciclo curto pela tela,
+    porque o QR do WhatsApp expira em poucos segundos e é substituído."""
+    provider = _provider()
+
+    if provider == "baileys":
+        return baileys_manager.peek_qr_code()
+    if provider == "evolution":
+        return evolution_qr(settings_manager.get_settings())
+
+    return {"status": "not_applicable"}
+
+
 @router.post("/whatsapp/disconnect")
 def whatsapp_disconnect():
     """Encerra a sessão local (aplicável ao Baileys)."""

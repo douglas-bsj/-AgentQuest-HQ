@@ -79,13 +79,18 @@ def start_bridge(agentquest_port: int = 8000, ignore_groups: bool = True) -> dic
     env["AUTH_DIR"] = base_path("whatsapp_session")
     env["IGNORE_GROUPS"] = "true" if ignore_groups else "false"
 
+    # O log da ponte vai para arquivo em vez de ser descartado: sem ele nao ha
+    # como diagnosticar o que o WhatsApp entregou (JIDs, tipos de remetente,
+    # falhas de conexao).
+    log_path = base_path("whatsapp-bridge.log")
     try:
+        log_file = open(log_path, "a", encoding="utf-8")
         _processo = subprocess.Popen(
             [node, entrada],
             cwd=BRIDGE_DIR,
             env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=log_file,
+            stderr=log_file,
         )
     except Exception as e:
         return {"status": "error", "message": f"Falha ao iniciar a ponte: {e}"}
@@ -163,6 +168,25 @@ def request_qr_code(settings: dict) -> dict:
         time.sleep(1)
 
     return {"status": "error", "message": "A ponte nao gerou o QR Code a tempo."}
+
+
+def peek_qr_code() -> dict:
+    """Le o QR atual sem tentar iniciar nada — usado no polling da tela.
+
+    O QR do WhatsApp expira em poucos segundos e a ponte gera um novo; a UI
+    precisa reler com frequencia, e por isso esta consulta e barata.
+    """
+    try:
+        resp = httpx.get(f"{BRIDGE_URL}/qr", timeout=3)
+        if resp.status_code == 200:
+            dados = resp.json()
+            if dados.get("qr_base64"):
+                return {"status": "qr_ready", "qr_base64": dados["qr_base64"]}
+        elif resp.status_code == 404:
+            return {"status": resp.json().get("status", "no_qr")}
+        return {"status": "no_qr"}
+    except Exception:
+        return {"status": "bridge_offline"}
 
 
 def send_text(numero: str, texto: str) -> dict:

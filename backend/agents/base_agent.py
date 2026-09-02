@@ -33,55 +33,55 @@ class BaseAgent:
         self.name = name
         self.system_prompt = system_prompt
 
-    def invoke(self, user_message, expect_json=False):
-        """Executa a chamada à IA com fallback automático para IA Local caso a nuvem esgote cota."""
+    def invoke_raw(self, user_message):
+        """Chama o provedor ativo e, se ele falhar, cai automaticamente na IA Local.
+
+        Retorna (texto, erro) sem aplicar a resposta heurística — para que quem
+        chama decida o que fazer na falha. É esta a função reaproveitada pelos
+        módulos que não herdam de BaseAgent (Oráculo, Minerador de Memória,
+        Aprendiz de Feedback e Hermes/Nous), garantindo que todos tenham a mesma
+        contingência para o Ollama.
+        """
         cfg = settings_manager.get_settings().get("ai_providers", {})
         active_provider = cfg.get("active_provider", "gemini")
         auto_fallback_local = cfg.get("auto_fallback_local", True)
 
-        # 1. TENTA O PROVEDOR PRINCIPAL CONFIGURADO
-        text = None
-        primary_failed = False
-        failure_reason = ""
+        chamadas = {
+            "gemini": self._call_gemini,
+            "nous_openrouter": self._call_openrouter,
+            "openai": self._call_openai,
+            "local": self._call_local,
+        }
 
-        if active_provider == "gemini":
-            text, err = self._call_gemini(user_message, cfg)
-            if err:
-                primary_failed = True
-                failure_reason = err
-        elif active_provider == "nous_openrouter":
-            text, err = self._call_openrouter(user_message, cfg)
-            if err:
-                primary_failed = True
-                failure_reason = err
-        elif active_provider == "openai":
-            text, err = self._call_openai(user_message, cfg)
-            if err:
-                primary_failed = True
-                failure_reason = err
-        elif active_provider == "local":
-            text, err = self._call_local(user_message, cfg)
-            if err:
-                primary_failed = True
-                failure_reason = err
+        chamada = chamadas.get(active_provider)
+        if not chamada:
+            return None, f"Provedor '{active_provider}' não suportado"
 
-        if text and not primary_failed:
+        text, err = chamada(user_message, cfg)
+        if text and not err:
+            return text, None
+
+        if auto_fallback_local and active_provider != "local":
+            print(f"[CONTINGÊNCIA ATIVA] Agente {self.name}: Provedor '{active_provider}' falhou ({str(err)[:80]}). Alternando automaticamente para IA Local (Ollama/LM Studio)...")
+            local_text, local_err = self._call_local(user_message, cfg)
+            if local_text and not local_err:
+                print(f"[CONTINGÊNCIA SUCESSO] Agente {self.name} respondido com sucesso pela IA Local!")
+                return local_text, None
+            return None, f"provedor '{active_provider}': {err} | IA local: {local_err}"
+
+        return None, err
+
+    def invoke(self, user_message, expect_json=False):
+        """Executa a chamada à IA com fallback automático para IA Local e, em
+        último caso, resposta heurística."""
+        text, err = self.invoke_raw(user_message)
+
+        if text and not err:
             if expect_json:
                 return self._parse_json(text)
             return text
 
-        # 2. CONTINGÊNCIA / FALLBACK AUTOMÁTICO PARA IA LOCAL SE GEMINI OU NUVEM FALHOU
-        if primary_failed and auto_fallback_local and active_provider != "local":
-            print(f"[CONTINGÊNCIA ATIVA] Agente {self.name}: Provedor '{active_provider}' falhou ({failure_reason[:80]}). Alternando automaticamente para IA Local (Ollama/LM Studio)...")
-            local_text, local_err = self._call_local(user_message, cfg)
-            if local_text and not local_err:
-                print(f"[CONTINGÊNCIA SUCESSO] Agente {self.name} respondido com sucesso pela IA Local!")
-                if expect_json:
-                    return self._parse_json(local_text)
-                return local_text
-
-        # 3. SE INCLUSIVE A IA LOCAL NÃO ESTIVER DISPONÍVEL, USA REGRAS DE CONTROLE HEURÍSTICO
-        print(f"[AVISO] Agente {self.name}: Todos os modelos de IA falharam. Acionando resposta heurística de emergência.")
+        print(f"[AVISO] Agente {self.name}: Todos os modelos de IA falharam ({str(err)[:120]}). Acionando resposta heurística de emergência.")
         return self._fallback(user_message, expect_json)
 
     def _call_gemini(self, user_message, cfg):
@@ -91,7 +91,16 @@ class BaseAgent:
             return None, "Google GenAI SDK ou API Key indisponível"
 
         model_name = cfg.get("gemini_model", "gemini-3.6-flash")
-        candidate_models = [model_name, "gemini-3.6-flash", "gemini-3.6-pro", "gemini-2.0-flash", "gemini-1.5-flash"]
+        # Alternativas para quando o modelo escolhido responde 503 (alta demanda).
+        # Os antigos gemini-2.0-flash e gemini-1.5-flash foram retirados: hoje
+        # devolvem 404 e só gastavam tentativas antes de cair na IA Local.
+        candidate_models = [
+            model_name,
+            "gemini-3.6-flash",
+            "gemini-3.7-flash",
+            "gemini-3.5-flash",
+            "gemini-3.5-flash-lite",
+        ]
         models_to_try = list(dict.fromkeys([m for m in candidate_models if m]))
 
         last_error = ""

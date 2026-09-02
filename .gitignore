@@ -53,3 +53,4 @@ build/vendor/
 whatsapp-bridge/node_modules/
 whatsapp-bridge/auth_state/
 whatsapp_session/
+whatsapp-bridge.log

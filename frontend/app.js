@@ -113,6 +113,10 @@ const API = {
     const r = await fetch(API_BASE + '/api/channels/whatsapp/connect', { method: 'POST' });
     return r.json();
   },
+  async peekWhatsAppQR() {
+    const r = await fetch(API_BASE + '/api/channels/whatsapp/qr');
+    return r.json();
+  },
   async restartWhatsAppStack() {
     const r = await fetch(API_BASE + '/api/channels/whatsapp/restart-stack', { method: 'POST' });
     return r.json();
@@ -2494,11 +2498,26 @@ async function checkWhatsAppStatus() {
     dotEl.className = 'status-pulse-dot ' + statusClass;
     if (labelEl) labelEl.textContent = label;
 
-    // Enquanto aguarda pareamento, continua checando até conectar
-    if (res.instance_state === 'connecting' || res.instance_state === 'open') {
-      if (res.instance_state === 'open' && whatsappStatusPollTimer) {
+    if (res.instance_state === 'open') {
+      // Conectou: para o polling e esconde o QR
+      if (whatsappStatusPollTimer) {
         clearInterval(whatsappStatusPollTimer);
         whatsappStatusPollTimer = null;
+      }
+      if (qrBox) qrBox.style.display = 'none';
+    } else if (res.instance_state === 'connecting' && qrBox && qrBox.style.display !== 'none') {
+      // O QR do WhatsApp expira em poucos segundos e o provedor emite um novo.
+      // Sem rebuscar a cada ciclo, a tela mostraria um QR morto e o pareamento
+      // nunca completaria.
+      try {
+        const novo = await API.peekWhatsAppQR();
+        if (novo.status === 'qr_ready' && novo.qr_base64 && qrImg) {
+          qrImg.src = novo.qr_base64;
+        } else if (novo.status === 'already_connected') {
+          if (qrBox) qrBox.style.display = 'none';
+        }
+      } catch (e) {
+        console.warn('Falha ao renovar o QR Code:', e);
       }
     }
   } catch (e) {

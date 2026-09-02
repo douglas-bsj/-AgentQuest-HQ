@@ -91,22 +91,19 @@ PERGUNTA DO USUÁRIO:
             answer = ""
             cited_sources = []
 
-            if self.client:
-                try:
-                    response = self.client.chat.completions.create(
-                        model=self.model,
-                        messages=[
-                            {"role": "system", "content": "Você é o Oráculo do AgentQuest HQ. Responda em português com base nos fatos fornecidos."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        temperature=0.3,
-                        max_tokens=1000
-                    )
-                    answer = response.choices[0].message.content
-                except Exception as e:
-                    print(f"[ORACLE ERROR] {e}")
-                    answer = self._fallback_answer(question, facts)
+            # Passa pelo cliente compartilhado: se o provedor de nuvem estiver
+            # fora do ar ou sem cota, a IA Local (Ollama) assume automaticamente
+            # em vez de o Oráculo devolver erro.
+            from backend.agents.ai_client import chat
+
+            texto, erro = chat(
+                "Você é o Oráculo do AgentQuest HQ. Responda em português com base nos fatos fornecidos.",
+                prompt,
+            )
+            if texto and not erro:
+                answer = texto
             else:
+                print(f"[ORACLE] IA indisponível ({str(erro)[:120]}). Usando resposta heurística local.")
                 answer = self._fallback_answer(question, facts)
 
             # 4. Salva a interação no histórico do chat
