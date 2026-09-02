@@ -5,29 +5,14 @@ Conecta-se à API compatível com OpenAI (como OpenRouter) para rodar os modelos
 
 import os
 import json
-from dotenv import load_dotenv
 
-load_dotenv()
+from backend.tools.settings_manager import settings_manager
 
 try:
     from openai import OpenAI
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
-
-NOUS_API_KEY = os.getenv("NOUS_API_KEY", "")
-NOUS_BASE_URL = os.getenv("NOUS_BASE_URL", "https://openrouter.ai/api/v1")
-NOUS_MODEL_NAME = os.getenv("NOUS_MODEL_NAME", "nousresearch/hermes-3-llama-3.1-405b")
-
-if OPENAI_AVAILABLE and NOUS_API_KEY and NOUS_API_KEY != "sua_chave_openrouter_aqui":
-    client = OpenAI(
-        base_url=NOUS_BASE_URL,
-        api_key=NOUS_API_KEY,
-    )
-    NOUS_READY = True
-else:
-    client = None
-    NOUS_READY = False
 
 
 class NousHermesAgent:
@@ -38,11 +23,38 @@ class NousHermesAgent:
         self.name = name
         self.system_prompt = system_prompt
 
+    def _get_client(self):
+        """Monta o cliente a cada chamada, lendo settings.json primeiro (com fallback
+        para variáveis de ambiente) — evita ficar preso a uma chave vazia lida uma
+        única vez na importação do módulo (que pode acontecer antes do settings.json
+        ser carregado, ou antes do usuário configurar a chave pela UI)."""
+        cfg = settings_manager.get_settings().get("ai_providers", {})
+        api_key = cfg.get("nous_api_key") or os.getenv("NOUS_API_KEY", "")
+        base_url = cfg.get("nous_base_url") or os.getenv("NOUS_BASE_URL", "https://openrouter.ai/api/v1")
+        model_name = cfg.get("nous_model_name") or os.getenv("NOUS_MODEL_NAME", "nousresearch/hermes-3-llama-3.1-405b")
+
+        if not OPENAI_AVAILABLE or not api_key or api_key == "sua_chave_openrouter_aqui":
+            return None, None
+
+        return OpenAI(base_url=base_url, api_key=api_key), model_name
+
     def invoke(self, user_message, expect_json=False):
         """
-        Envia uma mensagem ao Nous Hermes via OpenRouter / OpenAI API compatível.
+        Envia a mensagem ao provedor configurado, com contingência automática
+        para a IA Local (Ollama) quando a nuvem falha.
         """
-        if not NOUS_READY or not client:
+        # Caminho preferencial: cliente compartilhado, que já embute o fallback.
+        from backend.agents.ai_client import chat
+
+        texto, erro = chat(self.system_prompt, user_message)
+        if texto and not erro:
+            return self._parse_json(texto) if expect_json else texto
+
+        print(f"[HERMES] IA indisponível ({str(erro)[:120]}).")
+
+        # Caminho legado: cliente OpenRouter direto, caso esteja configurado
+        client, model_name = self._get_client()
+        if not client:
             return self._fallback(user_message, expect_json)
 
         try:
@@ -53,7 +65,7 @@ class NousHermesAgent:
                 sys_msg += "\n\nCRITICAL: Return ONLY valid JSON."
 
             response = client.chat.completions.create(
-                model=NOUS_MODEL_NAME,
+                model=model_name,
                 messages=[
                     {"role": "system", "content": sys_msg},
                     {"role": "user", "content": user_message}

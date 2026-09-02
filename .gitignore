@@ -30,8 +30,14 @@ Thumbs.db
 
 # Binários / Instaladores pesados
 *.exe
-qrcode_whatsapp.png
-vault/.obsidian/
+qrcode*.png
+vault/
+
+# Artefatos de build (o instalador é gerado, não versionado)
+build/staging/
+build/work/
+build/dist/
+build/output/
 
 # IDE
 .vscode/
@@ -39,3 +45,12 @@ vault/.obsidian/
 backend/database.sqlite3
 backend/__pycache__/
 __pycache__/
+
+# Node portátil baixado sob demanda (scripts/fetch_node.py)
+build/vendor/
+
+# Dependências e sessão da ponte de WhatsApp
+whatsapp-bridge/node_modules/
+whatsapp-bridge/auth_state/
+whatsapp_session/
+whatsapp-bridge.log

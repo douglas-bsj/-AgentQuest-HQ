@@ -18,10 +18,11 @@ import datetime
 import httpx
 from dotenv import load_dotenv
 
-load_dotenv()
+from backend.utils.paths import base_path
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-OUTPUTS_DIR = os.path.join(BASE_DIR, "outputs")
+load_dotenv(base_path(".env"))
+
+OUTPUTS_DIR = base_path("outputs")
 
 
 class ActionDispatcher:
@@ -130,10 +131,52 @@ class ActionDispatcher:
         
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         encoded_text = urllib.parse.quote(message_text)
-        clean_phone = "".join(c for c in destination if c.isdigit())
-        wa_link = f"https://wa.me/{clean_phone}?text={encoded_text}" if clean_phone else f"https://wa.me/?text={encoded_text}"
 
-        # Tenta envio automático via Evolution API se configurado
+        # O destino pode ser um telefone ou o JID completo da conversa
+        # (ex: "215779...@lid"). O JID precisa ser preservado inteiro: reduzir a
+        # dígitos e remontar como telefone enviava a resposta para o vazio.
+        destino_e_jid = "@" in destination
+        clean_phone = "".join(c for c in destination.split("@")[0] if c.isdigit())
+
+        # O link wa.me só funciona com telefone real (até 15 dígitos)
+        telefone_valido = clean_phone if 0 < len(clean_phone) <= 15 else ""
+        wa_link = (
+            f"https://wa.me/{telefone_valido}?text={encoded_text}"
+            if telefone_valido else f"https://wa.me/?text={encoded_text}"
+        )
+
+        # ── Provedor: ponte local Baileys (Node, sem Docker) ──
+        if provider == "baileys" and (destino_e_jid or clean_phone):
+            from backend.tools import baileys_manager
+            res = baileys_manager.send_text(destination if destino_e_jid else clean_phone, message_text)
+            if res.get("status") == "sent":
+                print(f"[DISPATCH BAILEYS] Mensagem enviada para {clean_phone}!")
+                return {
+                    "status": "sent",
+                    "channel": "whatsapp",
+                    "method": res.get("method", "Baileys"),
+                    "destination": clean_phone,
+                    "wa_link": wa_link,
+                }
+            falha_envio = res.get("message", "falha no envio")
+            print(f"[DISPATCH BAILEYS] {falha_envio}")
+
+        # ── Provedor: WhatsApp Cloud API oficial da Meta ──
+        if provider == "meta_official" and clean_phone:
+            from backend.tools import meta_cloud_manager
+            res = meta_cloud_manager.send_text(settings, clean_phone, message_text)
+            if res.get("status") == "sent":
+                print(f"[DISPATCH META] Mensagem enviada para {clean_phone}!")
+                return {
+                    "status": "sent",
+                    "channel": "whatsapp",
+                    "method": res.get("method", "Meta Cloud API"),
+                    "destination": clean_phone,
+                    "wa_link": wa_link,
+                }
+            print(f"[DISPATCH META] {res.get('message', 'falha no envio')}")
+
+        # ── Provedor: Evolution API (Docker) ──
         if provider == "evolution" and api_url and api_token and clean_phone:
             try:
                 # Endpoint padrão da Evolution API v2: POST /message/sendText/{instance}

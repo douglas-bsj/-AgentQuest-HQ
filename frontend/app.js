@@ -1,7 +1,12 @@
 // ══════════════════════════════════════════════════════════════════
 // ── API CONNECTION MODULE ────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════
-const API_BASE = 'http://127.0.0.1:8000';
+// Quando o painel é servido pelo próprio backend, usa a origem da página —
+// o servidor escolhe uma porta livre no boot, então fixar 8000 quebraria o
+// painel em qualquer máquina onde essa porta já esteja ocupada.
+const API_BASE = window.location.protocol.startsWith('http')
+  ? window.location.origin
+  : 'http://127.0.0.1:8000';
 let isOnline = false;  // true = API mode, false = demo mode
 
 const API = {
@@ -55,6 +60,10 @@ const API = {
     const r = await fetch(API_BASE + '/api/missions?status=rejected');
     return r.json();
   },
+  async getApprovedMissions() {
+    const r = await fetch(API_BASE + '/api/missions?status=approved');
+    return r.json();
+  },
   async restoreMission(id) {
     const r = await fetch(API_BASE + '/api/missions/' + id + '/restore', { method: 'POST' });
     return r.json();
@@ -82,6 +91,34 @@ const API = {
   async generateReport(type, query) {
     const q = query ? '&query=' + encodeURIComponent(query) : '';
     const r = await fetch(API_BASE + '/api/reports/generate?type=' + type + q);
+    return r.json();
+  },
+  async getOnboardingStatus() {
+    const r = await fetch(API_BASE + '/api/settings/onboarding-status');
+    return r.json();
+  },
+  async saveOnboarding(geminiApiKey) {
+    const r = await fetch(API_BASE + '/api/settings/onboarding', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gemini_api_key: geminiApiKey })
+    });
+    return r.json();
+  },
+  async getWhatsAppStatus() {
+    const r = await fetch(API_BASE + '/api/channels/whatsapp/status');
+    return r.json();
+  },
+  async connectWhatsApp() {
+    const r = await fetch(API_BASE + '/api/channels/whatsapp/connect', { method: 'POST' });
+    return r.json();
+  },
+  async peekWhatsAppQR() {
+    const r = await fetch(API_BASE + '/api/channels/whatsapp/qr');
+    return r.json();
+  },
+  async restartWhatsAppStack() {
+    const r = await fetch(API_BASE + '/api/channels/whatsapp/restart-stack', { method: 'POST' });
     return r.json();
   }
 };
@@ -190,6 +227,10 @@ async function initApp() {
   updateConnectionBadge();
 
   if (isOnline) {
+    await checkOnboardingStatus();
+  }
+
+  if (isOnline) {
     // ── MODO API: carregar dados reais do servidor ──
     try {
       // Carregar agentes do servidor
@@ -279,7 +320,8 @@ function addMissionCardFromAPI(data) {
     deadline: data.deadline,
     urgent: data.urgent,
     channel: data.channel,
-    response: data.response
+    response: data.response,
+    received_message: data.received_message
   });
 }
 
@@ -287,11 +329,6 @@ function addMissionCardWithId(serverId, data) {
   var list = document.getElementById('missions-list');
   if (!list) return;
   var currentCards = list.querySelectorAll('.card-mission');
-
-  if (currentCards.length >= 6) {
-    showToast('⚠️ Limite de 6 missões simultâneas atingido. Aprove ou rejeite itens.', 'info');
-    return;
-  }
 
   var id = serverId || (++nextMissionId);
   var card = document.createElement('article');
@@ -311,6 +348,32 @@ function addMissionCardWithId(serverId, data) {
       incomingText = incomingText.split('—')[0].trim();
     }
 
+    var draftHtml = '';
+    var buttonsHtml = '';
+    
+    if (!data.response || data.response.trim() === '') {
+      buttonsHtml = '<div style="display: flex; gap: 8px; width: 100%;">' +
+          '<button class="btn-action generate-ai-btn" onclick="generateAI(' + id + ', this)" style="flex: 1; background: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%); color: white; border: none; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">🪄 Gerar Resposta IA</button>' +
+          '<button class="btn-action btn-reject-task" onclick="openRejectModal(' + id + ')" title="Arquivar a missão sem gerar IA" style="flex: 0 0 110px;"><span>❌</span> Rejeitar</button>' +
+        '</div>';
+    } else {
+      draftHtml = '<button class="draft-toggle-btn" onclick="toggleDraftAccordion(this)" title="Expandir resposta preparada pelo agente">' +
+        '<span>✍️ Ver Resposta Preparada pelo Agente</span>' +
+        '<span class="draft-arrow">▼</span>' +
+      '</button>' +
+      '<div class="draft-collapse">' +
+        '<div class="draft-card-inner">' +
+          '<div class="draft-header-label"><span>⚡</span> Resposta pronta para execução pós-aprovação:</div>' +
+          '<div class="draft-body-text" id="draft-text-' + id + '">' + data.response + '</div>' +
+          '<div class="draft-dispatch-channel"><span>🚀</span> ' + data.channel + '</div>' +
+        '</div>' +
+      '</div>';
+      
+      buttonsHtml = '<button class="btn-action btn-approve-exec" onclick="handleApproveMission(' + id + ')" title="Aprova e executa a resposta imediatamente"><span>✅</span> Aprovar</button>' +
+        '<button class="btn-action btn-edit-inline" onclick="openEditDraftModal(' + id + ')" title="Editar o texto da resposta antes do envio"><span>✏️</span> Editar</button>' +
+        '<button class="btn-action btn-reject-task" onclick="openRejectModal(' + id + ')" title="Rejeita a ação e dá feedback de aprendizado"><span>❌</span> Rejeitar</button>';
+    }
+
     card.innerHTML =
     '<div class="mission-header-bar ' + data.source + '">' +
       '<span>' + sourceLabel + '</span>' +
@@ -323,23 +386,11 @@ function addMissionCardWithId(serverId, data) {
         '<span class="info-tag">📅 Prazo: ' + data.deadline + '</span>' +
       '</div>' +
       '<div class="mission-preview-snippet" style="font-size: 11.5px; color: #38bdf8; background: rgba(56, 189, 248, 0.08); padding: 8px 12px; border-radius: 8px; margin: 8px 0; border: 1px solid rgba(56, 189, 248, 0.2);">' +
-        '<strong>📩 Mensagem Recebida:</strong> "' + (incomingText ? incomingText.substring(0, 140) : 'Mensagem direta do contato') + '"' +
+        '<strong>📩 Mensagem Recebida:</strong> "' + (incomingText ? incomingText.substring(0, 450) + (incomingText.length > 450 ? '...' : '') : 'Mensagem direta do contato') + '"' +
       '</div>' +
-      '<button class="draft-toggle-btn" onclick="toggleDraftAccordion(this)" title="Expandir resposta preparada pelo agente">' +
-        '<span>✍️ Ver Resposta Preparada pelo Agente</span>' +
-        '<span class="draft-arrow">▼</span>' +
-      '</button>' +
-      '<div class="draft-collapse">' +
-        '<div class="draft-card-inner">' +
-          '<div class="draft-header-label"><span>⚡</span> Resposta pronta para execução pós-aprovação:</div>' +
-          '<div class="draft-body-text" id="draft-text-' + id + '">' + data.response + '</div>' +
-          '<div class="draft-dispatch-channel"><span>🚀</span> ' + data.channel + '</div>' +
-        '</div>' +
-      '</div>' +
+      draftHtml +
       '<div class="mission-buttons-row">' +
-        '<button class="btn-action btn-approve-exec" onclick="handleApproveMission(' + id + ')" title="Aprova e executa a resposta imediatamente"><span>✅</span> Aprovar</button>' +
-        '<button class="btn-action btn-edit-inline" onclick="openEditDraftModal(' + id + ')" title="Editar o texto da resposta antes do envio"><span>✏️</span> Editar</button>' +
-        '<button class="btn-action btn-reject-task" onclick="openRejectModal(' + id + ')" title="Rejeita a ação e dá feedback de aprendizado"><span>❌</span> Rejeitar</button>' +
+        buttonsHtml +
       '</div>' +
     '</div>';
 
@@ -383,19 +434,54 @@ function updateAgentState(agentId, newStatus) {
   }
 }
 
+// Momento da última atividade real de cada agente, alimentado pelo feed do
+// servidor. Antes esta animação era uma lista fixa de temporizadores: mostrava
+// "processando" em agentes parados e nada nos que estavam realmente
+// trabalhando — informação decorativa e enganosa.
+const ultimaAtividadeAgente = {};
+const JANELA_PROCESSANDO_MS = 12000;
+
+// O feed identifica o agente pelo nome exibido; o badge, pelo id.
+const NOME_AGENTE_PARA_ID = {
+  'hermes': 'hermes',
+  'hermes (recepção)': 'atendente',
+  'atendente': 'atendente',
+  'administrativo': 'admin',
+  'financeiro': 'financeiro',
+  'comercial': 'comercial',
+  'jurídico lgpd': 'juridico',
+  'juridico lgpd': 'juridico',
+  'planejador': 'planejador',
+  'revisor': 'revisor'
+};
+
+function idDoAgentePeloNome(nome) {
+  if (!nome) return null;
+  const chave = String(nome).toLowerCase().trim();
+  if (NOME_AGENTE_PARA_ID[chave]) return NOME_AGENTE_PARA_ID[chave];
+  // "Hermes — Gerando resposta", "Financeiro (Cobranças)" etc.
+  for (const [n, id] of Object.entries(NOME_AGENTE_PARA_ID)) {
+    if (chave.startsWith(n)) return id;
+  }
+  return null;
+}
+
+function registrarAtividadeDeAgente(nomeAgente) {
+  const id = idDoAgentePeloNome(nomeAgente);
+  if (id) ultimaAtividadeAgente[id] = Date.now();
+}
+
 function startAgentStatusCycle() {
-  const schedule = [
-    [2500, 'atendente', 'ativo'],
-    [4500, 'comercial', 'ativo'],
-    [7000, 'financeiro', 'processando'],
-    [9500, 'planejador', 'processando'],
-    [13000, 'financeiro', 'ativo'],
-    [16000, 'planejador', 'ativo'],
-    [19000, 'atendente', 'processando']
-  ];
-  schedule.forEach(([delay, id, status]) => {
-    setTimeout(() => updateAgentState(id, status), delay);
-  });
+  // Reflete o estado real: um agente aparece como "processando" enquanto houver
+  // atividade dele no feed dentro da janela recente; fora disso, volta a "ativo".
+  setInterval(() => {
+    const agora = Date.now();
+    SQUAD_AGENTS.forEach(a => {
+      const visto = ultimaAtividadeAgente[a.id];
+      const processando = visto && (agora - visto) < JANELA_PROCESSANDO_MS;
+      updateAgentState(a.id, processando ? 'processando' : 'ativo');
+    });
+  }, 1500);
 }
 
 function addMissionCard(data) {
@@ -802,6 +888,9 @@ function startFeedLoop() {
               agent: item.agent_name,
               text: item.text
             });
+            // Marca o agente como em atividade — o badge do squad passa a
+            // refletir o que está realmente acontecendo
+            registrarAtividadeDeAgente(item.agent_name);
           }
         });
       }
@@ -810,10 +899,22 @@ function startFeedLoop() {
       const missions = await API.getMissions();
       const currentCards = document.querySelectorAll('#missions-list .card-mission');
       const currentIds = new Set(Array.from(currentCards).map(c => parseInt(c.id.replace('mission-card-', ''))));
+      const incomingIds = new Set(missions.map(m => m.id));
       
       missions.forEach(m => {
         if (!currentIds.has(m.id)) {
           addMissionCardFromAPI(m);
+        }
+      });
+      
+      // Remove missões que foram fechadas/resolvidas por fora (ex: auto-aprovação via celular)
+      currentIds.forEach(id => {
+        if (!incomingIds.has(id)) {
+          const card = document.getElementById('mission-card-' + id);
+          if (card) {
+            card.classList.add('approving');
+            setTimeout(() => card.remove(), 480);
+          }
         }
       });
 
@@ -1335,6 +1436,189 @@ function handleEditAndApproveRejected(id) {
   openEditDraftModal(id);
 }
 
+// ── APPROVED / EXECUTED MISSIONS MODAL STATE & HANDLERS ──
+let approvedMissionsCache = [];
+
+async function openApprovedMissionsModal() {
+  const overlay = document.getElementById('approved-modal-overlay');
+  if (overlay) overlay.classList.add('active');
+
+  const listEl = document.getElementById('approved-missions-list');
+  const emptyEl = document.getElementById('approved-empty-state');
+  listEl.innerHTML = '<div style="color: #4ade80; padding: 25px; text-align: center;">⏳ Carregando histórico de missões executadas...</div>';
+  emptyEl.style.display = 'none';
+
+  if (isOnline) {
+    try {
+      const missions = await API.getApprovedMissions();
+      approvedMissionsCache = missions;
+      renderApprovedMissions(missions);
+    } catch (e) {
+      console.error(e);
+      listEl.innerHTML = '<div style="color: #f87171; padding: 20px; text-align: center;">Erro ao carregar histórico de missões aprovadas.</div>';
+    }
+  } else {
+    renderApprovedMissions(approvedMissionsCache);
+  }
+}
+
+function closeApprovedMissionsModal() {
+  const overlay = document.getElementById('approved-modal-overlay');
+  if (overlay) overlay.classList.remove('active');
+}
+
+function renderApprovedMissions(missions) {
+  const listEl = document.getElementById('approved-missions-list');
+  const emptyEl = document.getElementById('approved-empty-state');
+
+  if (!missions || missions.length === 0) {
+    listEl.innerHTML = '';
+    emptyEl.style.display = 'block';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  listEl.innerHTML = missions.map(m => {
+    const sourceLabel = m.source === 'whatsapp' ? '💬 WhatsApp' : m.source === 'telegram' ? '✈️ Telegram' : '📧 E-mail';
+    const incoming = m.received_message || '';
+    const dateStr = m.created_at ? new Date(m.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    return `
+      <div class="rejected-mission-card" id="approved-card-${m.id}" style="border-left: 3px solid #22c55e; background: rgba(15, 23, 42, 0.75);">
+        <div class="rejected-card-header">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span class="info-tag" style="background: rgba(34, 197, 94, 0.2); color: #86efac; font-weight: 700;">✅ Executada #${m.id}</span>
+            <span class="info-tag">${sourceLabel}</span>
+            <span class="info-tag">🤖 ${m.agent}</span>
+            <span class="info-tag" style="background: rgba(56, 189, 248, 0.12); color: #7dd3fc;">🚀 ${m.channel || 'Despachado'}</span>
+          </div>
+          <span style="font-size: 10.5px; color: #94a3b8;">${dateStr || m.deadline || ''}</span>
+        </div>
+        <div class="rejected-card-title" style="color: #f8fafc; font-weight: 700; margin: 8px 0 4px 0; font-size: 13px;">${m.title}</div>
+        ${incoming ? `<div style="font-size: 11px; color: #94a3b8; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); padding: 7px 10px; border-radius: 6px; margin: 6px 0;"><strong>📩 Mensagem Recebida:</strong> "${incoming.length > 250 ? incoming.substring(0, 250) + '...' : incoming}"</div>` : ''}
+        <div class="rejected-card-body" style="background: rgba(34, 197, 94, 0.05); border: 1px solid rgba(34, 197, 94, 0.25); color: #e2e8f0; white-space: pre-wrap; font-size: 12px; line-height: 1.5; margin-top: 6px; padding: 10px 12px; border-radius: 8px;">${m.response || 'Nenhuma resposta gravada.'}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ── PENDING / AWAITING ACTION MISSIONS MODAL HANDLERS ──
+async function openPendingMissionsModal() {
+  const overlay = document.getElementById('pending-modal-overlay');
+  if (overlay) overlay.classList.add('active');
+
+  const listEl = document.getElementById('pending-modal-list');
+  const emptyEl = document.getElementById('pending-modal-empty-state');
+  listEl.innerHTML = '<div style="color: #f59e0b; padding: 25px; text-align: center;">⏳ Carregando demandas pendentes...</div>';
+  emptyEl.style.display = 'none';
+
+  if (isOnline) {
+    try {
+      const missions = await API.getMissions();
+      renderPendingModalMissions(missions);
+    } catch (e) {
+      console.error(e);
+      listEl.innerHTML = '<div style="color: #f87171; padding: 20px; text-align: center;">Erro ao carregar demandas pendentes.</div>';
+    }
+  } else {
+    const mainCards = document.querySelectorAll('#missions-list .card-mission');
+    if (mainCards.length === 0) {
+      listEl.innerHTML = '';
+      emptyEl.style.display = 'block';
+    } else {
+      listEl.innerHTML = '<div style="color: #cbd5e1; padding: 20px; text-align: center;">As demandas ativas estão visíveis no painel central.</div>';
+    }
+  }
+}
+
+function closePendingMissionsModal() {
+  const overlay = document.getElementById('pending-modal-overlay');
+  if (overlay) overlay.classList.remove('active');
+}
+
+function renderPendingModalMissions(missions) {
+  const listEl = document.getElementById('pending-modal-list');
+  const emptyEl = document.getElementById('pending-modal-empty-state');
+
+  if (!missions || missions.length === 0) {
+    listEl.innerHTML = '';
+    emptyEl.style.display = 'block';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  listEl.innerHTML = missions.map(m => {
+    const sourceLabel = m.source === 'whatsapp' ? '💬 WhatsApp' : m.source === 'telegram' ? '✈️ Telegram' : '📧 E-mail';
+    const incoming = m.received_message || '';
+    const hasResponse = m.response && m.response.trim().length > 0;
+    return `
+      <div class="rejected-mission-card" id="pending-modal-card-${m.id}" style="border-left: 3px solid #f59e0b; background: rgba(15, 23, 42, 0.75);">
+        <div class="rejected-card-header">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span class="info-tag" style="background: rgba(245, 158, 11, 0.2); color: #fde68a; font-weight: 700;">⏳ Demanda #${m.id}</span>
+            <span class="info-tag">${sourceLabel}</span>
+            <span class="info-tag">🤖 ${m.agent}</span>
+            ${m.urgent ? '<span class="tag-urgente">URGENTE</span>' : ''}
+          </div>
+          <span style="font-size: 10.5px; color: #94a3b8;">📅 Prazo: ${m.deadline || 'Pendente'}</span>
+        </div>
+        <div class="rejected-card-title" style="color: #f8fafc; font-weight: 700; margin: 8px 0 4px 0; font-size: 13px;">${m.title}</div>
+        ${incoming ? `<div style="font-size: 11px; color: #38bdf8; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); padding: 7px 10px; border-radius: 6px; margin: 6px 0;"><strong>📩 Mensagem Recebida:</strong> "${incoming.length > 250 ? incoming.substring(0, 250) + '...' : incoming}"</div>` : ''}
+        ${hasResponse ? `
+          <div class="rejected-card-body" style="background: rgba(245, 158, 11, 0.04); border: 1px solid rgba(245, 158, 11, 0.25); color: #e2e8f0; white-space: pre-wrap; font-size: 12px; line-height: 1.5; margin-top: 6px; padding: 10px 12px; border-radius: 8px;"><strong>✍️ Resposta Proposta:</strong>\n${m.response}</div>
+        ` : `
+          <div style="font-size: 11px; color: #94a3b8; font-style: italic; margin-top: 6px;">Aguardando acionamento da IA ou resposta manual pelo celular.</div>
+        `}
+      </div>
+    `;
+  }).join('');
+}
+
+// ── PROCESSING SQUAD AGENTS MODAL HANDLERS ──
+function openProcessingAgentsModal() {
+  const overlay = document.getElementById('processing-modal-overlay');
+  if (overlay) overlay.classList.add('active');
+  renderProcessingAgents();
+}
+
+function closeProcessingAgentsModal() {
+  const overlay = document.getElementById('processing-modal-overlay');
+  if (overlay) overlay.classList.remove('active');
+}
+
+function renderProcessingAgents() {
+  const container = document.getElementById('processing-agents-list');
+  if (!container) return;
+
+  container.innerHTML = SQUAD_AGENTS.map(agent => {
+    const isProcessing = agent.status === 'processando';
+    const statusClass = isProcessing ? 'processing' : (agent.status === 'ativo' ? 'active' : 'idle');
+    const statusBadge = isProcessing ? '⚙️ Processando' : (agent.status === 'ativo' ? '🟢 Ativo & Monitorando' : '🔵 Ocioso / Standby');
+    const statusBg = isProcessing ? 'rgba(56, 189, 248, 0.15)' : 'rgba(34, 197, 94, 0.1)';
+    const statusColor = isProcessing ? '#7dd3fc' : '#86efac';
+
+    return `
+      <div class="cfg-agent-card" style="border-left: 3px solid ${agent.color}; background: rgba(15, 23, 42, 0.85);">
+        <div class="cfg-agent-header">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 24px;">${agent.icon}</span>
+            <div>
+              <div class="cfg-agent-title" style="color: #f8fafc; font-weight: 700;">${agent.name}</div>
+              <div class="cfg-agent-role" style="color: #94a3b8; font-size: 11px;">${agent.role}</div>
+            </div>
+          </div>
+          <span style="font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 12px; background: ${statusBg}; color: ${statusColor}; border: 1px solid ${statusColor}40;">
+            ${statusBadge}
+          </span>
+        </div>
+        <div style="font-size: 11px; color: #cbd5e1; margin-top: 6px; line-height: 1.45;">
+          ${isProcessing ? '⚡ Executando varredura de pendências e sintetizando plano de ação.' : '👀 Em prontidão para receber novos eventos do WhatsApp, Telegram e E-mail.'}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+
 // ── GLOBAL SETTINGS STATE & HANDLERS ──
 let globalSettings = null;
 
@@ -1358,6 +1642,13 @@ function switchSettingsTab(tabName) {
 
   const pane = document.getElementById('settings-tab-' + tabName);
   if (pane) pane.classList.add('active');
+
+  if (tabName === 'ai') {
+    setTimeout(() => checkActiveAIStatus(false), 80);
+  }
+  if (tabName === 'channels') {
+    setTimeout(() => checkWhatsAppStatus(), 80);
+  }
 }
 
 function toggleAIProviderFields() {
@@ -1404,8 +1695,13 @@ function populateSettingsForm(s) {
     if (ai.openai_api_key) document.getElementById('cfg-openai-key').value = ai.openai_api_key;
     if (ai.openai_model) document.getElementById('cfg-openai-model').value = ai.openai_model;
     if (ai.local_base_url) document.getElementById('cfg-local-url').value = ai.local_base_url;
+    if (ai.local_model && document.getElementById('cfg-local-model')) document.getElementById('cfg-local-model').value = ai.local_model;
     if (ai.local_api_key) document.getElementById('cfg-local-key').value = ai.local_api_key;
+    if (ai.auto_fallback_local !== undefined && document.getElementById('cfg-auto-fallback-local')) {
+      document.getElementById('cfg-auto-fallback-local').checked = Boolean(ai.auto_fallback_local);
+    }
     toggleAIProviderFields();
+    setTimeout(() => checkActiveAIStatus(false), 100);
   }
 
   // Tab 2: Agents
@@ -1454,6 +1750,11 @@ function populateSettingsForm(s) {
       if (wa.api_token) document.getElementById('cfg-wa-token').value = wa.api_token;
       if (wa.webhook_url) document.getElementById('cfg-wa-webhook').value = wa.webhook_url;
       if (wa.ignore_groups !== undefined) document.getElementById('cfg-wa-ignore-groups').value = String(wa.ignore_groups);
+      if (wa.meta_phone_number_id) document.getElementById('cfg-wa-meta-phone-id').value = wa.meta_phone_number_id;
+      if (wa.meta_access_token) document.getElementById('cfg-wa-meta-token').value = wa.meta_access_token;
+      if (wa.meta_verify_token) document.getElementById('cfg-wa-meta-verify').value = wa.meta_verify_token;
+      if (wa.meta_api_version) document.getElementById('cfg-wa-meta-version').value = wa.meta_api_version;
+      toggleWhatsAppProviderFields();
     }
     if (s.channels.telegram) {
       const tg = s.channels.telegram;
@@ -1512,7 +1813,9 @@ async function saveAllSettings() {
       openai_api_key: document.getElementById('cfg-openai-key').value,
       openai_model: document.getElementById('cfg-openai-model').value,
       local_base_url: document.getElementById('cfg-local-url').value,
-      local_api_key: document.getElementById('cfg-local-key').value
+      local_model: document.getElementById('cfg-local-model') ? document.getElementById('cfg-local-model').value : 'qwen2.5:7b',
+      local_api_key: document.getElementById('cfg-local-key').value,
+      auto_fallback_local: document.getElementById('cfg-auto-fallback-local') ? document.getElementById('cfg-auto-fallback-local').checked : true
     },
     agents: agentsData,
     channels: {
@@ -1523,7 +1826,11 @@ async function saveAllSettings() {
         instance_name: document.getElementById('cfg-wa-instance').value,
         api_token: document.getElementById('cfg-wa-token').value,
         webhook_url: document.getElementById('cfg-wa-webhook').value,
-        ignore_groups: document.getElementById('cfg-wa-ignore-groups').value === 'true'
+        ignore_groups: document.getElementById('cfg-wa-ignore-groups').value === 'true',
+        meta_phone_number_id: document.getElementById('cfg-wa-meta-phone-id').value,
+        meta_access_token: document.getElementById('cfg-wa-meta-token').value,
+        meta_verify_token: document.getElementById('cfg-wa-meta-verify').value,
+        meta_api_version: document.getElementById('cfg-wa-meta-version').value || 'v21.0'
       },
       telegram: {
         enabled: true,
@@ -1566,30 +1873,47 @@ async function saveAllSettings() {
   closeSettingsModal();
 }
 
-async function testCurrentAIConnection() {
-  const provider = document.getElementById('cfg-ai-active-provider').value;
-  const statusEl = document.getElementById('cfg-test-status');
-  statusEl.className = 'test-status-msg loading';
-  statusEl.textContent = '⏳ Testando conexão com a IA...';
+async function checkActiveAIStatus(forceRefresh = false) {
+  const card = document.getElementById('ai-status-card');
+  if (!card) return;
+
+  const providerSelect = document.getElementById('cfg-ai-active-provider');
+  const provider = providerSelect ? providerSelect.value : 'gemini';
 
   let apiKey = '';
   let model = '';
   let baseUrl = '';
 
   if (provider === 'nous_openrouter') {
-    apiKey = document.getElementById('cfg-nous-key').value;
-    model = document.getElementById('cfg-nous-model').value;
-    baseUrl = document.getElementById('cfg-nous-base-url').value;
+    apiKey = document.getElementById('cfg-nous-key') ? document.getElementById('cfg-nous-key').value : '';
+    model = document.getElementById('cfg-nous-model') ? document.getElementById('cfg-nous-model').value : '';
+    baseUrl = document.getElementById('cfg-nous-base-url') ? document.getElementById('cfg-nous-base-url').value : '';
   } else if (provider === 'gemini') {
-    apiKey = document.getElementById('cfg-gemini-key').value;
-    model = document.getElementById('cfg-gemini-model').value;
+    apiKey = document.getElementById('cfg-gemini-key') ? document.getElementById('cfg-gemini-key').value : '';
+    model = document.getElementById('cfg-gemini-model') ? document.getElementById('cfg-gemini-model').value : '';
   } else if (provider === 'openai') {
-    apiKey = document.getElementById('cfg-openai-key').value;
-    model = document.getElementById('cfg-openai-model').value;
+    apiKey = document.getElementById('cfg-openai-key') ? document.getElementById('cfg-openai-key').value : '';
+    model = document.getElementById('cfg-openai-model') ? document.getElementById('cfg-openai-model').value : '';
   } else if (provider === 'local') {
-    apiKey = document.getElementById('cfg-local-key').value;
-    baseUrl = document.getElementById('cfg-local-url').value;
+    apiKey = document.getElementById('cfg-local-key') ? document.getElementById('cfg-local-key').value : '';
+    baseUrl = document.getElementById('cfg-local-url') ? document.getElementById('cfg-local-url').value : '';
   }
+
+  const dotEl = document.getElementById('ai-status-dot');
+  const providerEl = document.getElementById('ai-stat-provider');
+  const statusEl = document.getElementById('ai-stat-status');
+  const latencyEl = document.getElementById('ai-stat-latency');
+  const creditsEl = document.getElementById('ai-stat-credits');
+  const updatedEl = document.getElementById('ai-stat-updated');
+  const msgBox = document.getElementById('ai-status-msg-box');
+  const msgText = document.getElementById('ai-status-msg-text');
+  const msgRecom = document.getElementById('ai-status-msg-recom');
+  const msgIcon = document.getElementById('ai-status-msg-icon');
+  const btnRefresh = document.getElementById('btn-refresh-ai-status');
+
+  if (dotEl) dotEl.className = 'status-pulse-dot loading';
+  if (statusEl) statusEl.innerHTML = '<span class="badge-status-pill loading">⏳ Diagnosticando...</span>';
+  if (btnRefresh) btnRefresh.disabled = true;
 
   try {
     const res = await API.testAI({
@@ -1598,19 +1922,80 @@ async function testCurrentAIConnection() {
       model: model,
       base_url: baseUrl
     });
-    if (res.success) {
-      statusEl.className = 'test-status-msg success';
-      statusEl.textContent = '✅ ' + res.message;
-      showToast('✅ ' + res.message, 'success');
-    } else {
-      statusEl.className = 'test-status-msg error';
-      statusEl.textContent = '❌ ' + res.message;
-      showToast('❌ ' + res.message, 'error');
+
+    const isOnline = res.success && res.status === 'online';
+    const isWarning = res.status === 'rate_limited' || res.status === 'quota_exhausted' || res.status === 'model_not_found';
+
+    if (dotEl) {
+      dotEl.className = 'status-pulse-dot ' + (isOnline ? 'online' : (isWarning ? 'warning' : 'error'));
     }
-  } catch (e) {
-    statusEl.className = 'test-status-msg error';
-    statusEl.textContent = '❌ Erro de conexão com o servidor local.';
-    showToast('❌ Erro de rede ao testar IA.', 'error');
+
+    if (providerEl) {
+      providerEl.textContent = (res.provider_label || provider) + (res.model ? ' (' + res.model + ')' : '');
+    }
+
+    if (statusEl) {
+      const badgeClass = isOnline ? 'online' : (isWarning ? 'warning' : 'error');
+      statusEl.innerHTML = `<span class="badge-status-pill ${badgeClass}">${res.status_badge || (res.success ? '🟢 Online' : '🔴 Erro')}</span>`;
+    }
+
+    if (latencyEl) {
+      latencyEl.textContent = res.latency_ms > 0 ? `${res.latency_ms} ms` : '-- ms';
+      latencyEl.style.color = res.latency_ms > 0 ? (res.latency_ms < 1500 ? '#4ade80' : '#fbbf24') : '#f1f5f9';
+    }
+
+    if (creditsEl) {
+      creditsEl.textContent = res.credits_info || 'N/A';
+      creditsEl.style.color = isOnline ? '#38bdf8' : (isWarning ? '#fde68a' : '#fca5a5');
+    }
+
+    if (updatedEl) {
+      updatedEl.textContent = 'Última checagem: ' + (res.checked_at || new Date().toLocaleTimeString('pt-BR'));
+    }
+
+    if (msgBox && msgText) {
+      msgBox.style.display = 'flex';
+      msgBox.className = 'ai-status-message-box ' + (isOnline ? 'success' : (isWarning ? 'warning' : 'error'));
+      if (msgIcon) msgIcon.textContent = isOnline ? '✨' : (isWarning ? '⚠️' : '❌');
+      msgText.textContent = res.message || '';
+      if (msgRecom) {
+        msgRecom.textContent = res.recommendation ? '💡 Dica: ' + res.recommendation : '';
+        msgRecom.style.display = res.recommendation ? 'block' : 'none';
+      }
+    }
+
+    if (forceRefresh) {
+      showToast(isOnline ? '✅ Provedor e Conta 100% Operacionais!' : (isWarning ? '⚠️ Alerta de Cota/Créditos no Provedor' : '❌ Provedor Inacessível'), isOnline ? 'success' : (isWarning ? 'info' : 'error'));
+    }
+
+  } catch (err) {
+    if (dotEl) dotEl.className = 'status-pulse-dot error';
+    if (statusEl) statusEl.innerHTML = '<span class="badge-status-pill error">🔴 Erro Local</span>';
+    if (msgBox && msgText) {
+      msgBox.style.display = 'flex';
+      msgBox.className = 'ai-status-message-box error';
+      if (msgIcon) msgIcon.textContent = '❌';
+      msgText.textContent = 'Não foi possível contatar o servidor local para diagnóstico.';
+      if (msgRecom) msgRecom.style.display = 'none';
+    }
+  } finally {
+    if (btnRefresh) btnRefresh.disabled = false;
+  }
+}
+
+async function testCurrentAIConnection() {
+  const statusEl = document.getElementById('cfg-test-status');
+  if (statusEl) {
+    statusEl.className = 'test-status-msg loading';
+    statusEl.textContent = '⏳ Diagnosticando conta e modelo...';
+  }
+  await checkActiveAIStatus(true);
+  if (statusEl) {
+    const dot = document.getElementById('ai-status-dot');
+    const isOnline = dot && dot.classList.contains('online');
+    const isWarning = dot && dot.classList.contains('warning');
+    statusEl.className = 'test-status-msg ' + (isOnline ? 'success' : (isWarning ? 'loading' : 'error'));
+    statusEl.textContent = isOnline ? '✅ Conexão e Conta Operacionais!' : (isWarning ? '⚠️ Limite de Cota/Créditos Atingido' : '❌ Falha na Conexão');
   }
 }
 
@@ -1630,6 +2015,18 @@ window.addEventListener('click', (e) => {
   const rejectedOverlay = document.getElementById('rejected-modal-overlay');
   if (e.target === rejectedOverlay) {
     closeRejectedMissionsModal();
+  }
+  const approvedOverlay = document.getElementById('approved-modal-overlay');
+  if (e.target === approvedOverlay) {
+    closeApprovedMissionsModal();
+  }
+  const pendingOverlay = document.getElementById('pending-modal-overlay');
+  if (e.target === pendingOverlay) {
+    closePendingMissionsModal();
+  }
+  const processingOverlay = document.getElementById('processing-modal-overlay');
+  if (e.target === processingOverlay) {
+    closeProcessingAgentsModal();
   }
   const settingsOverlay = document.getElementById('settings-modal-overlay');
   if (e.target === settingsOverlay) {
@@ -1913,6 +2310,334 @@ async function submitCustomMining() {
   }
 }
 
+// ══════════════════════════════════════════════════════════════════
+// ── ONBOARDING DE PRIMEIRA EXECUÇÃO ──────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+
+async function checkOnboardingStatus() {
+  if (localStorage.getItem('agentquest_onboarding_dismissed') === 'true') return;
+
+  try {
+    const res = await API.getOnboardingStatus();
+    if (res.needs_onboarding) {
+      showOnboardingModal();
+    }
+  } catch (e) {
+    console.warn('Falha ao checar status de onboarding:', e);
+  }
+}
+
+function showOnboardingModal() {
+  const overlay = document.getElementById('onboarding-modal-overlay');
+  if (overlay) overlay.classList.add('active');
+}
+
+function dismissOnboarding() {
+  localStorage.setItem('agentquest_onboarding_dismissed', 'true');
+  const overlay = document.getElementById('onboarding-modal-overlay');
+  if (overlay) overlay.classList.remove('active');
+  showToast('⚠️ Configure sua chave de IA depois em Configurações → Provedores de IA.', 'info');
+}
+
+async function submitOnboarding() {
+  const input = document.getElementById('onboarding-gemini-key');
+  const key = input ? input.value.trim() : '';
+  const msgBox = document.getElementById('onboarding-msg-box');
+  const btn = document.getElementById('btn-onboarding-submit');
+
+  if (!key) {
+    showToast('⚠️ Cole sua chave da API Gemini para continuar.', 'error');
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+  if (msgBox) {
+    msgBox.style.display = 'block';
+    msgBox.className = 'ai-status-message-box';
+    msgBox.textContent = '⏳ Validando chave...';
+  }
+
+  try {
+    const res = await API.saveOnboarding(key);
+    // Cota esgotada (429) indica chave válida com limite temporário atingido —
+    // a chave serve, então o onboarding não deve prender o usuário aqui.
+    const isQuotaOnly = res.status === 'rate_limited' || res.status === 'quota_exhausted';
+    const keyAccepted = (res.success && res.status === 'online') || isQuotaOnly;
+
+    if (msgBox) {
+      msgBox.className = 'ai-status-message-box ' + (keyAccepted ? (isQuotaOnly ? 'warning' : 'success') : 'error');
+      msgBox.textContent = (keyAccepted ? (isQuotaOnly ? '⚠️ ' : '✅ ') : '❌ ')
+        + (res.message || (keyAccepted ? 'Chave validada com sucesso!' : 'Não foi possível validar a chave.'));
+    }
+
+    if (keyAccepted) {
+      localStorage.removeItem('agentquest_onboarding_dismissed');
+      showToast(isQuotaOnly
+        ? '⚠️ Chave salva! A cota do plano gratuito está no limite no momento.'
+        : '🎉 Configuração concluída! Bem-vindo ao AgentQuest HQ.',
+        isQuotaOnly ? 'info' : 'success');
+      setTimeout(() => {
+        const overlay = document.getElementById('onboarding-modal-overlay');
+        if (overlay) overlay.classList.remove('active');
+        loadSettings();
+      }, isQuotaOnly ? 2200 : 1200);
+    }
+  } catch (e) {
+    console.error(e);
+    if (msgBox) {
+      msgBox.className = 'ai-status-message-box error';
+      msgBox.textContent = '❌ Erro ao salvar. Verifique sua conexão e tente novamente.';
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ── ABA CHANNELS: STATUS & QR CODE DO WHATSAPP ───────────────────
+// ══════════════════════════════════════════════════════════════════
+
+let whatsappStatusPollTimer = null;
+
+function toggleWhatsAppProviderFields(trocaDoUsuario = false) {
+  const select = document.getElementById('cfg-wa-provider');
+  if (!select) return;
+  const provider = select.value;
+
+  const blocos = {
+    baileys: 'cfg-wa-fields-baileys',
+    meta_official: 'cfg-wa-fields-meta',
+    evolution: 'cfg-wa-fields-evolution',
+    mock: 'cfg-wa-fields-mock'
+  };
+
+  Object.entries(blocos).forEach(([nome, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = (nome === provider) ? 'block' : 'none';
+  });
+
+  // O botão de conectar só faz sentido em provedores que mantêm sessão
+  const btn = document.getElementById('btn-wa-connect');
+  if (btn) {
+    btn.style.display = (provider === 'mock') ? 'none' : 'inline-flex';
+    btn.innerHTML = (provider === 'meta_official')
+      ? '<span class="refresh-icon">🔍</span> Validar Credenciais'
+      : '<span class="refresh-icon">📡</span> Conectar WhatsApp';
+  }
+
+  // Só Baileys e Evolution pareiam por QR — ao trocar de provedor, o QR
+  // exibido antes deixa de fazer sentido e some junto com o polling.
+  if (provider !== 'baileys' && provider !== 'evolution') {
+    const qrBox = document.getElementById('wa-qr-box');
+    if (qrBox) qrBox.style.display = 'none';
+    if (whatsappStatusPollTimer) {
+      clearInterval(whatsappStatusPollTimer);
+      whatsappStatusPollTimer = null;
+    }
+  }
+
+  // O endpoint de status responde pelo provedor SALVO. Se o usuário acabou de
+  // trocar o select e ainda não salvou, mostrar o status antigo enganaria —
+  // então pedimos para salvar em vez de exibir dado de outro provedor.
+  const salvo = (globalSettings?.channels?.whatsapp?.provider) || null;
+  const dotEl = document.getElementById('wa-status-dot');
+  const labelEl = document.getElementById('wa-status-label');
+
+  if (trocaDoUsuario && salvo && salvo !== provider) {
+    if (dotEl) dotEl.className = 'status-pulse-dot warning';
+    if (labelEl) labelEl.textContent = '⚠️ Salve as configurações para aplicar este provedor';
+  } else if (dotEl) {
+    setTimeout(() => checkWhatsAppStatus(), 50);
+  }
+}
+
+async function checkWhatsAppStatus() {
+  const dotEl = document.getElementById('wa-status-dot');
+  const labelEl = document.getElementById('wa-status-label');
+  const qrBox = document.getElementById('wa-qr-box');
+  const qrImg = document.getElementById('wa-qr-image');
+  const dockerWarning = document.getElementById('wa-docker-warning');
+  const connectBtn = document.getElementById('btn-wa-connect');
+
+  if (!dotEl) return;
+
+  dotEl.className = 'status-pulse-dot loading';
+  if (labelEl) labelEl.textContent = 'Verificando...';
+
+  try {
+    const res = await API.getWhatsAppStatus();
+    const provider = res.provider || 'baileys';
+
+    // O aviso de Docker só se aplica ao provedor Evolution
+    const faltaDocker = provider === 'evolution' && (!res.docker_installed || !res.docker_running);
+    if (dockerWarning) dockerWarning.style.display = faltaDocker ? 'block' : 'none';
+    if (connectBtn) connectBtn.disabled = faltaDocker;
+
+    let statusClass = 'warning';
+    let label = '🟡 Verificando...';
+
+    if (provider === 'mock') {
+      statusClass = 'online';
+      label = '🟢 Modo link wa.me — envio manual em 1 clique';
+      if (qrBox) qrBox.style.display = 'none';
+    } else if (provider === 'meta_official') {
+      if (res.instance_state === 'open') {
+        statusClass = 'online';
+        const num = res.connected_number ? ` (${res.connected_number})` : '';
+        label = `🟢 Conectado via Meta Cloud API${num}`;
+      } else {
+        statusClass = 'error';
+        label = '🔴 Credenciais da Meta não validadas';
+      }
+      if (qrBox) qrBox.style.display = 'none';
+    } else if (provider === 'baileys') {
+      if (!res.node_installed) {
+        statusClass = 'error';
+        label = '🔴 Node.js não encontrado — ponte indisponível';
+      } else if (!res.bridge_running) {
+        statusClass = 'warning';
+        label = '🟡 Ponte de WhatsApp parada — clique em Conectar';
+      } else if (res.instance_state === 'open') {
+        statusClass = 'online';
+        const num = res.connected_number ? ` (${res.connected_number})` : '';
+        label = `🟢 WhatsApp conectado${num}`;
+        if (qrBox) qrBox.style.display = 'none';
+      } else if (res.instance_state === 'connecting') {
+        statusClass = 'warning';
+        label = '🟠 Aguardando pareamento — escaneie o QR Code';
+      } else {
+        statusClass = 'warning';
+        label = '🟡 Ponte ativa, sem conta pareada — clique em Conectar';
+      }
+    } else {
+      // Evolution
+      if (!res.docker_installed) {
+        statusClass = 'error';
+        label = '🔴 Docker Desktop não encontrado';
+      } else if (!res.docker_running) {
+        statusClass = 'warning';
+        label = '🟡 Docker Desktop parado';
+      } else if (!res.evolution_reachable) {
+        statusClass = 'warning';
+        label = '🟡 Evolution API iniciando...';
+      } else if (res.instance_state === 'open') {
+        statusClass = 'online';
+        label = '🟢 WhatsApp conectado';
+        if (qrBox) qrBox.style.display = 'none';
+      } else if (res.instance_state === 'connecting') {
+        statusClass = 'warning';
+        label = '🟠 Aguardando pareamento (escaneie o QR Code)';
+      } else {
+        statusClass = 'online';
+        label = '🟢 Evolution API online — clique em Conectar';
+      }
+    }
+
+    dotEl.className = 'status-pulse-dot ' + statusClass;
+    if (labelEl) labelEl.textContent = label;
+
+    if (res.instance_state === 'open') {
+      // Conectou: para o polling e esconde o QR
+      if (whatsappStatusPollTimer) {
+        clearInterval(whatsappStatusPollTimer);
+        whatsappStatusPollTimer = null;
+      }
+      if (qrBox) qrBox.style.display = 'none';
+    } else if (res.instance_state === 'connecting' && qrBox && qrBox.style.display !== 'none') {
+      // O QR do WhatsApp expira em poucos segundos e o provedor emite um novo.
+      // Sem rebuscar a cada ciclo, a tela mostraria um QR morto e o pareamento
+      // nunca completaria.
+      try {
+        const novo = await API.peekWhatsAppQR();
+        if (novo.status === 'qr_ready' && novo.qr_base64 && qrImg) {
+          qrImg.src = novo.qr_base64;
+        } else if (novo.status === 'already_connected') {
+          if (qrBox) qrBox.style.display = 'none';
+        }
+      } catch (e) {
+        console.warn('Falha ao renovar o QR Code:', e);
+      }
+    }
+  } catch (e) {
+    console.warn('Falha ao checar status do WhatsApp:', e);
+    dotEl.className = 'status-pulse-dot error';
+    if (labelEl) labelEl.textContent = '🔴 Erro ao consultar status';
+  }
+}
+
+async function connectWhatsApp() {
+  const qrBox = document.getElementById('wa-qr-box');
+  const qrImg = document.getElementById('wa-qr-image');
+  const connectBtn = document.getElementById('btn-wa-connect');
+
+  if (connectBtn) connectBtn.disabled = true;
+  showToast('📡 Conectando ao WhatsApp...', 'info');
+
+  try {
+    const res = await API.connectWhatsApp();
+
+    if (res.status === 'qr_ready' && res.qr_base64) {
+      if (qrBox) qrBox.style.display = 'block';
+      if (qrImg) qrImg.src = res.qr_base64;
+      showToast('📱 Escaneie o QR Code com o WhatsApp do celular.', 'info');
+
+      if (whatsappStatusPollTimer) clearInterval(whatsappStatusPollTimer);
+      whatsappStatusPollTimer = setInterval(checkWhatsAppStatus, 3000);
+    } else if (res.status === 'already_connected') {
+      showToast('✅ WhatsApp já está conectado!', 'success');
+      checkWhatsAppStatus();
+    } else {
+      showToast('❌ ' + (res.message || 'Não foi possível conectar.'), 'error');
+    }
+  } catch (e) {
+    console.error(e);
+    showToast('❌ Erro ao conectar ao WhatsApp.', 'error');
+  } finally {
+    if (connectBtn) connectBtn.disabled = false;
+  }
+}
+
 window.addEventListener('DOMContentLoaded', initApp);
 
 
+
+function generateAI(id, btnElement) {
+  if (!isOnline) {
+    showToast('❌ Backend offline. Não é possível gerar IA no modo demo.', 'error');
+    return;
+  }
+  
+  btnElement.disabled = true;
+  btnElement.innerHTML = '⏳ Gerando...';
+  btnElement.style.opacity = '0.7';
+  
+  fetch(API_BASE + '/api/missions/' + id + '/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('Erro na geração da IA');
+    return res.json();
+  })
+  .then(data => {
+    showToast('✨ Resposta gerada pela IA com sucesso!', 'success');
+    forceFeedUpdate();
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('❌ Erro ao gerar resposta IA.', 'error');
+    btnElement.disabled = false;
+    btnElement.innerHTML = '🪄 Gerar Resposta IA';
+    btnElement.style.opacity = '1';
+  });
+}
+
+function forceFeedUpdate() {
+  if (isOnline) {
+    API.getMissions().then(missions => {
+      const list = document.getElementById('missions-list');
+      if (list) list.innerHTML = '';
+      missions.forEach(m => addMissionCardWithId(m.id, m));
+    });
+  }
+}

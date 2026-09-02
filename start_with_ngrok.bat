@@ -19,8 +19,8 @@ if not exist ".env" (
     pause
 )
 
-echo [1/2] Iniciando servidor backend...
-start "AgentQuest HQ - Backend" cmd /k "python run.py"
+echo [1/2] Iniciando AgentQuest HQ (WhatsApp + IA local + Backend)...
+start "AgentQuest HQ - Backend" cmd /k "python start_system.py"
 
 timeout /t 3 /nobreak >nul
 

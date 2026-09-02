@@ -24,14 +24,10 @@ class HermesOrchestrator:
         self.planner = PlannerAgent()
         self.reviewer = ReviewerAgent()
 
-    def process_incoming_event(self, raw_text: str, source: str = "whatsapp", db=None, sender_override: str = None):
+    def process_incoming_event(self, raw_text: str, source: str = "whatsapp", db=None, sender_override: str = None, reply_to: str = None):
         """
-        Executa o pipeline completo de 5 etapas:
-        1. Atendente: Extração estruturada de intenção
-        2. Administrativo: Triagem e roteamento por setor
-        3. Especialista: Elaboração da resposta/ação técnica
-        4. Revisor: Fase reflexiva e validação de qualidade
-        5. Persistência: Registro no SQLite e emissão de logs no feed
+        Recebe a mensagem bruta, realiza mineração de memória e cria a missão PENDENTE 
+        sem acionar a IA (para economia de tokens).
         """
         close_db_at_end = False
         if db is None:
@@ -39,17 +35,74 @@ class HermesOrchestrator:
             close_db_at_end = True
 
         try:
+            sender = sender_override or "Contato"
+            
+            # ── MINERAÇÃO DE MEMÓRIA & FATOS CRUZADOS (Oráculo) ──
+            try:
+                from backend.agents.memory_miner import memory_miner
+                memory_miner.mine_conversation(raw_text=raw_text, source_person=sender, source_channel=source)
+            except Exception as e:
+                print(f"[MEMORY MINER HOOK ERRO] {e}")
+
+            # ── Grava a Missão no Banco de Dados ──
+            channel_label = (
+                "💬 Disparo automático via WhatsApp" if source == "whatsapp"
+                else "✈️ Disparo automático via Telegram" if source == "telegram"
+                else "📧 Envio automático por E-mail"
+            )
+
+            new_mission = Mission(
+                source=source,
+                title=f"Nova Demanda — {sender}",
+                agent="Hermes (Recepção)",
+                deadline="Pendente",
+                urgent=False,
+                channel=channel_label,
+                response="",  # Vazio indicando que a IA ainda não gerou resposta
+                received_message=raw_text,
+                status="pending",
+                reply_to=reply_to,
+            )
+            db.add(new_mission)
+            db.commit()
+            db.refresh(new_mission)
+
+            return new_mission
+
+        finally:
+            if close_db_at_end:
+                db.close()
+
+    def generate_ai_response_for_mission(self, mission_id: int, db=None):
+        """
+        Executa o pipeline completo da IA para uma missão existente:
+        1. Atendente -> 2. Administrativo -> 3. Especialista -> 4. Revisor
+        """
+        close_db_at_end = False
+        if db is None:
+            db = SessionLocal()
+            close_db_at_end = True
+
+        try:
+            mission = db.query(Mission).filter(Mission.id == mission_id).first()
+            if not mission:
+                raise Exception("Missão não encontrada")
+                
+            raw_text = mission.received_message
+            source = mission.source
+            sender_parts = mission.title.split("—")
+            sender = sender_parts[-1].strip() if len(sender_parts) > 1 else "Contato"
+
             # ── ETAPA 1: Hermes anuncia início da triagem ──
             db.add(AgentLog(
                 agent_name="Hermes",
                 color="#a855f7",
-                text=f"Novo evento detectado via <strong>{source.capitalize()}</strong>. Iniciando pipeline multi-agente."
+                text=f"Gerando resposta IA para missão #{mission_id}."
             ))
             db.commit()
 
             # ── ETAPA 2: Atendente lê a mensagem ──
             attendant_data = self.attendant.read_message(raw_text, source)
-            sender = sender_override or attendant_data.get("remetente", "Remetente")
             subject = attendant_data.get("assunto", "Demanda recebida")
             urgency = attendant_data.get("urgencia", "media")
             is_urgent = (urgency == "alta")
@@ -60,13 +113,6 @@ class HermesOrchestrator:
                 text=f"Mensagem lida de <strong>{sender}</strong>: \"{subject}\""
             ))
             db.commit()
-
-            # ── MINERAÇÃO DE MEMÓRIA & FATOS CRUZADOS (Oráculo) ──
-            try:
-                from backend.agents.memory_miner import memory_miner
-                memory_miner.mine_conversation(raw_text=raw_text, source_person=sender, source_channel=source)
-            except Exception as e:
-                print(f"[MEMORY MINER HOOK ERRO] {e}")
 
             # ── ETAPA 3: Administrativo classifica o setor ──
             routing_data = self.admin.classify(attendant_data)
@@ -79,7 +125,7 @@ class HermesOrchestrator:
             ))
             db.commit()
 
-            # ── ETAPA 4: Especialista gera a resposta com base no Obsidian ──
+            # ── ETAPA 4: Especialista gera a resposta ──
             knowledge_rules = obsidian_bridge.get_knowledge_context()
             context = {
                 "source": source,
@@ -88,10 +134,6 @@ class HermesOrchestrator:
                 "knowledge_base": knowledge_rules,
                 "raw_text": raw_text
             }
-
-            specialist_name = "Comercial"
-            specialist_color = "#ef4444"
-            draft_response = ""
 
             if sector == "financeiro":
                 specialist_name = "Financeiro"
@@ -127,33 +169,19 @@ class HermesOrchestrator:
             db.add(AgentLog(
                 agent_name="Revisor",
                 color="#22c55e",
-                text=f"Fase Reflexiva concluída: texto validado e liberado para aprovação humana."
+                text=f"Fase Reflexiva concluída: texto validado e liberado para aprovação."
             ))
+            
+            # Atualiza a missão
+            mission.title = f"{subject} — {sender}"
+            mission.agent = specialist_name
+            mission.deadline = "Hoje" if is_urgent else "Em 48h"
+            mission.urgent = is_urgent
+            mission.response = final_reviewed_response
+            
             db.commit()
-
-            # ── ETAPA 6: Grava a Missão no Banco de Dados ──
-            channel_label = (
-                "💬 Disparo automático via WhatsApp" if source == "whatsapp"
-                else "✈️ Disparo automático via Telegram" if source == "telegram"
-                else "📧 Envio automático por E-mail"
-            )
-
-            new_mission = Mission(
-                source=source,
-                title=f"{subject} — {sender}",
-                agent=specialist_name,
-                deadline="Hoje" if is_urgent else "Em 48h",
-                urgent=is_urgent,
-                channel=channel_label,
-                response=final_reviewed_response,
-                received_message=raw_text,
-                status="pending"
-            )
-            db.add(new_mission)
-            db.commit()
-            db.refresh(new_mission)
-
-            return new_mission
+            db.refresh(mission)
+            return mission
 
         finally:
             if close_db_at_end:

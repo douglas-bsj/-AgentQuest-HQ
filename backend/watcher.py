@@ -21,11 +21,11 @@ from backend.tools.email_parser import parse_email_eml
 from backend.tools.doc_parser import parse_document
 from backend.agents.hermes_bridge import hermes_orchestrator
 from backend.database import SessionLocal, AgentLog
+from backend.utils.paths import base_path
 
 # Caminhos das pastas
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-INBOX_DIR = os.path.join(BASE_DIR, "inbox")
-PROCESSED_DIR = os.path.join(BASE_DIR, "processed")
+INBOX_DIR = base_path("inbox")
+PROCESSED_DIR = base_path("processed")
 
 
 def process_inbox_file(file_path: str):

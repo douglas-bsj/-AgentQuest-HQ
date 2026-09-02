@@ -8,9 +8,13 @@ import datetime
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+from backend.utils.paths import base_path
+
 # ── Caminho do banco SQLite ──────────────────────────────────────
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "database.sqlite3")
+# No executável empacotado a pasta backend/ não existe ao lado do .exe,
+# então ela é criada na primeira execução antes de o SQLite abrir o arquivo.
+DB_PATH = base_path("backend", "database.sqlite3")
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False}, echo=False)
@@ -35,6 +39,11 @@ class Mission(Base):
     channel = Column(String(200), nullable=False)          # Canal de despacho
     response = Column(Text, nullable=False)                # Resposta rascunhada pelo agente
     received_message = Column(Text, nullable=True)        # Texto/resumo da mensagem bruta recebida
+    # Endereço exato de onde a mensagem veio (ex: "5562...@s.whatsapp.net" ou
+    # "215779...@lid"). Guardado porque o WhatsApp usa LIDs que NÃO são telefone:
+    # remontar o destino a partir dos dígitos do título fazia a resposta ser
+    # enviada para um endereço inexistente, com falso sucesso.
+    reply_to = Column(String(120), nullable=True)
     status = Column(String(20), default="pending")         # pending | approved | rejected
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     resolved_at = Column(DateTime, nullable=True)
@@ -200,6 +209,38 @@ SEED_LOGS = [
 ]
 
 
+def _migrar_colunas_novas():
+    """Adiciona colunas criadas depois que o banco já existia.
+
+    O create_all() do SQLAlchemy só cria tabelas novas — não altera tabelas
+    existentes. Sem isso, quem já tinha banco (toda instalação em uso)
+    continuaria sem as colunas novas e o app quebraria ao gravá-las.
+    """
+    import sqlite3
+
+    novas = {
+        "missions": [("reply_to", "VARCHAR(120)")],
+    }
+
+    con = sqlite3.connect(DB_PATH)
+    try:
+        cur = con.cursor()
+        for tabela, colunas in novas.items():
+            cur.execute(f"PRAGMA table_info({tabela})")
+            existentes = {linha[1] for linha in cur.fetchall()}
+            if not existentes:
+                continue  # tabela ainda não criada; create_all cuidará dela
+            for nome, tipo in colunas:
+                if nome not in existentes:
+                    cur.execute(f"ALTER TABLE {tabela} ADD COLUMN {nome} {tipo}")
+                    print(f"[DB] Coluna {tabela}.{nome} adicionada.")
+        con.commit()
+    except Exception as e:
+        print(f"[DB] Aviso na migração de colunas: {e}")
+    finally:
+        con.close()
+
+
 def init_db(force_reset=False):
     """
     Cria as tabelas do banco de dados SQLite.
@@ -209,6 +250,7 @@ def init_db(force_reset=False):
         os.remove(DB_PATH)
 
     Base.metadata.create_all(bind=engine)
+    _migrar_colunas_novas()
 
 
 

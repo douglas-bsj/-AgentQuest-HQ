@@ -10,8 +10,9 @@ import re
 import datetime
 from pathlib import Path
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-VAULT_DIR = os.path.join(BASE_DIR, "vault")
+from backend.utils.paths import base_path
+
+VAULT_DIR = base_path("vault")
 KNOWLEDGE_DIR = os.path.join(VAULT_DIR, "01_Base_Conhecimento")
 CRM_DIR = os.path.join(VAULT_DIR, "02_Clientes_CRM")
 REPORTS_DIR = os.path.join(VAULT_DIR, "03_Relatorios_BI")
