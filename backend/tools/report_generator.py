@@ -11,9 +11,9 @@ from sqlalchemy.orm import Session
 from backend.database import Mission, AgentLog, ActionHistory
 from backend.agents.nous_hermes_agent import NousHermesAgent
 from backend.tools.obsidian_bridge import obsidian_bridge
+from backend.utils.paths import base_path
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-OUTPUTS_DIR = os.path.join(BASE_DIR, "outputs")
+OUTPUTS_DIR = base_path("outputs")
 
 
 def compile_system_metrics(db: Session) -> dict:

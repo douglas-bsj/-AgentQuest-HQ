@@ -8,9 +8,13 @@ import datetime
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+from backend.utils.paths import base_path
+
 # ── Caminho do banco SQLite ──────────────────────────────────────
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "database.sqlite3")
+# No executável empacotado a pasta backend/ não existe ao lado do .exe,
+# então ela é criada na primeira execução antes de o SQLite abrir o arquivo.
+DB_PATH = base_path("backend", "database.sqlite3")
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False}, echo=False)

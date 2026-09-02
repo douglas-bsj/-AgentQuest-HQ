@@ -30,8 +30,14 @@ Thumbs.db
 
 # Binários / Instaladores pesados
 *.exe
-qrcode_whatsapp.png
-vault/.obsidian/
+qrcode*.png
+vault/
+
+# Artefatos de build (o instalador é gerado, não versionado)
+build/staging/
+build/work/
+build/dist/
+build/output/
 
 # IDE
 .vscode/

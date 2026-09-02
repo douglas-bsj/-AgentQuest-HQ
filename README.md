@@ -111,11 +111,37 @@ agentquest-hq/
 │   ├── index.html          # Interface do usuário e modal de BI
 │   ├── style.css           # Estilos e gráficos
 │   └── app.js              # Lógica dos agentes e relatórios
+├── vault_template/         # Cofre limpo copiado para vault/ na primeira execução
+├── build/                  # Spec do PyInstaller e script do Inno Setup
+├── scripts/                # build_release.py — gera o instalador distribuível
 ├── docs/                   # Documentação detalhada e mockups aprovados
 └── requirements.txt        # Dependências Python
 ```
 
 ---
 
-## 🚀 Como Visualizar o Front-end Agora
-Abra o arquivo [`frontend/index.html`](frontend/index.html) diretamente em qualquer navegador moderno.
+## 🚀 Instalação
+
+### Para usuários finais (instalador Windows)
+Execute o **`AgentQuestHQ-Setup-1.0.0.exe`** e siga o assistente. O runtime Python vem
+embutido — não é preciso instalar mais nada. Na primeira execução, um assistente pede a
+chave gratuita da API Gemini e o painel abre sozinho no navegador.
+
+Instala em `%LOCALAPPDATA%\Programs\AgentQuest HQ` (sem exigir administrador), cria atalhos
+e aparece em "Aplicativos instalados" do Windows. Detalhes e passo a passo do WhatsApp em
+[`TESTING_GUIDE.md`](TESTING_GUIDE.md).
+
+> 💬 **WhatsApp:** requer o [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+> instalado à parte. O pareamento (QR Code) é feito dentro do próprio painel, em
+> **⚙️ Configurações → Canais de Mensageria**.
+
+### Para desenvolvedores (a partir do código)
+```bash
+pip install -r requirements.txt
+python start_system.py
+```
+
+Gerar um novo instalador (requer [Inno Setup 6](https://jrsoftware.org/isdl.php)):
+```bash
+python scripts/build_release.py
+```

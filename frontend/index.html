@@ -4,8 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AgentQuest HQ — Painel de Missões & BI Executivo</title>
+  <link rel="icon" type="image/png" href="/assets/logo.png">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 
@@ -14,7 +15,7 @@
 <!-- TOP HEADER -->
 <header id="topbar">
   <div class="brand">
-    <span class="brand-logo">🤖</span>
+    <img class="brand-logo" src="/assets/logo.png" alt="AgentQuest HQ" width="26" height="26">
     <div class="brand-title">AgentQuest HQ</div>
     <span class="brand-version">v2.0</span>
   </div>
@@ -55,20 +56,35 @@
     <div class="panel-body" id="agents-container"></div>
   </section>
 
-  <!-- CENTER: METRICS & LIVE REAL-TIME FEED -->
+  <!-- CENTER: MISSIONS & READY-MADE ACTIONS -->
+  <section class="panel" id="panel-missions">
+    <div class="panel-header">
+      <div class="panel-header-title"><span>📜</span> Missões & Respostas Prontas</div>
+      <span style="font-size: 10px; color: #a5b4fc;">Aprovação Humana</span>
+    </div>
+    <div class="panel-body">
+      <div id="missions-list"></div>
+      <div class="empty-missions-state" id="empty-state">
+        <div class="empty-icon">🎉</div>
+        <p><strong>Tudo em dia!</strong><br>Todas as ações sugeridas foram revisadas e despachadas.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: METRICS & LIVE REAL-TIME FEED -->
   <section id="panel-center">
     <div class="stats-grid">
-      <div class="stat-box">
-        <div class="stat-val" id="metric-pending" style="color: #f59e0b;">5</div>
-        <div class="stat-tit">Aguardando Ação</div>
+      <div class="stat-box clickable-stat-box" onclick="openPendingMissionsModal()" title="Clique para ver detalhes das demandas aguardando ação">
+        <div class="stat-val" id="metric-pending" style="color: #f59e0b;">0</div>
+        <div class="stat-tit">Aguardando Ação <span style="font-size: 10px; opacity: 0.8;">⏳</span></div>
       </div>
-      <div class="stat-box">
-        <div class="stat-val" id="metric-processing" style="color: #38bdf8;">2</div>
-        <div class="stat-tit">Processando</div>
+      <div class="stat-box clickable-stat-box" onclick="openProcessingAgentsModal()" title="Clique para ver o status dos agentes e pipeline em tempo real">
+        <div class="stat-val" id="metric-processing" style="color: #38bdf8;">0</div>
+        <div class="stat-tit">Processando <span style="font-size: 10px; opacity: 0.8;">⚙️</span></div>
       </div>
-      <div class="stat-box">
+      <div class="stat-box clickable-stat-box" onclick="openApprovedMissionsModal()" title="Clique para ver o histórico de missões aprovadas e executadas">
         <div class="stat-val" id="metric-approved" style="color: #4ade80;">0</div>
-        <div class="stat-tit">Executadas</div>
+        <div class="stat-tit">Executadas <span style="font-size: 10px; opacity: 0.8;">📋</span></div>
       </div>
       <div class="stat-box clickable-stat-box" onclick="openRejectedMissionsModal()" title="Clique para ver missões rejeitadas, restaurar ou editar e aprovar">
         <div class="stat-val" id="metric-rejected" style="color: #f87171;">0</div>
@@ -81,21 +97,6 @@
         <span style="font-size: 10px; color: #4ade80;">● LIVE</span>
       </div>
       <div id="feed-list"></div>
-    </div>
-  </section>
-
-  <!-- RIGHT: MISSIONS & READY-MADE ACTIONS -->
-  <section class="panel" id="panel-missions">
-    <div class="panel-header">
-      <div class="panel-header-title"><span>📜</span> Missões & Respostas Prontas</div>
-      <span style="font-size: 10px; color: #a5b4fc;">Aprovação Humana</span>
-    </div>
-    <div class="panel-body">
-      <div id="missions-list"></div>
-      <div class="empty-missions-state" id="empty-state">
-        <div class="empty-icon">🎉</div>
-        <p><strong>Tudo em dia!</strong><br>Todas as ações sugeridas foram revisadas e despachadas.</p>
-      </div>
     </div>
   </section>
 </main>
@@ -379,6 +380,98 @@
   </div>
 </div>
 
+<!-- APPROVED / EXECUTED MISSIONS MODAL -->
+<div id="approved-modal-overlay" class="modal-overlay">
+  <div class="modal-card rejected-modal approved-modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title-row">
+        <div class="report-brand-badge" style="background: rgba(34, 197, 94, 0.2); border-color: rgba(34, 197, 94, 0.4); color: #86efac;">
+          <span>🚀</span> HISTÓRICO DE EXECUÇÕES
+        </div>
+        <h2>Missões Executadas & Aprovadas</h2>
+        <p>Histórico completo de atendimentos e respostas enviadas pelo esquadrão de agentes.</p>
+      </div>
+      <button class="modal-close-btn" onclick="closeApprovedMissionsModal()">✕</button>
+    </div>
+
+    <div class="rejected-modal-body">
+      <div id="approved-missions-list" class="rejected-missions-list">
+        <!-- Renderizado dinamicamente via JS -->
+      </div>
+      <div class="empty-missions-state" id="approved-empty-state" style="display: none; padding: 40px 20px;">
+        <div class="empty-icon">📂</div>
+        <p><strong>Nenhuma missão executada ainda!</strong><br>As missões aprovadas e respondidas aparecerão aqui.</p>
+      </div>
+    </div>
+
+    <div class="edit-modal-actions">
+      <button class="btn-edit-cancel" onclick="closeApprovedMissionsModal()">
+        <span>Fechar</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- PENDING / AWAITING ACTION MISSIONS MODAL -->
+<div id="pending-modal-overlay" class="modal-overlay">
+  <div class="modal-card rejected-modal pending-modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title-row">
+        <div class="report-brand-badge" style="background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.4); color: #fde68a;">
+          <span>⏳</span> FILA DE TRIAGEM
+        </div>
+        <h2>Demandas Aguardando Ação</h2>
+        <p>Mensagens recebidas que aguardam geração de resposta pela IA ou aprovação humana.</p>
+      </div>
+      <button class="modal-close-btn" onclick="closePendingMissionsModal()">✕</button>
+    </div>
+
+    <div class="rejected-modal-body">
+      <div id="pending-modal-list" class="rejected-missions-list">
+        <!-- Renderizado dinamicamente via JS -->
+      </div>
+      <div class="empty-missions-state" id="pending-modal-empty-state" style="display: none; padding: 40px 20px;">
+        <div class="empty-icon">🎉</div>
+        <p><strong>Tudo limpo por aqui!</strong><br>Nenhuma demanda pendente aguardando ação no momento.</p>
+      </div>
+    </div>
+
+    <div class="edit-modal-actions">
+      <button class="btn-edit-cancel" onclick="closePendingMissionsModal()">
+        <span>Fechar</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- PROCESSING SQUAD AGENTS MODAL -->
+<div id="processing-modal-overlay" class="modal-overlay">
+  <div class="modal-card rejected-modal processing-modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title-row">
+        <div class="report-brand-badge" style="background: rgba(56, 189, 248, 0.2); border-color: rgba(56, 189, 248, 0.4); color: #7dd3fc;">
+          <span>⚙️</span> STATUS OPERACIONAL DO ESQUADRÃO
+        </div>
+        <h2>Agentes em Processamento & Monitoramento</h2>
+        <p>Visão em tempo real das atividades, setores ativos e pipeline de raciocínio de cada agente.</p>
+      </div>
+      <button class="modal-close-btn" onclick="closeProcessingAgentsModal()">✕</button>
+    </div>
+
+    <div class="rejected-modal-body">
+      <div id="processing-agents-list" class="cfg-agents-grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+        <!-- Renderizado dinamicamente via JS com os 8 agentes e seus status em tempo real -->
+      </div>
+    </div>
+
+    <div class="edit-modal-actions">
+      <button class="btn-edit-cancel" onclick="closeProcessingAgentsModal()">
+        <span>Fechar</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- GLOBAL SETTINGS MODAL -->
 <div id="settings-modal-overlay" class="modal-overlay">
   <div class="modal-card settings-modal-container" onclick="event.stopPropagation()">
@@ -417,12 +510,58 @@
         </div>
         <div class="settings-form-group">
           <label>Provedor Principal para Orquestração & BI:</label>
-          <select id="cfg-ai-active-provider" class="settings-select" onchange="toggleAIProviderFields()">
+          <select id="cfg-ai-active-provider" class="settings-select" onchange="toggleAIProviderFields(); checkActiveAIStatus(false);">
+            <option value="gemini">Google Gemini (Gemini 3.6 Flash / Pro)</option>
             <option value="nous_openrouter">Nous Research / OpenRouter (Hermes 3 405B / 70B)</option>
-            <option value="gemini">Google Gemini (Gemini 2.5 Flash / Pro)</option>
             <option value="openai">OpenAI (GPT-4o / GPT-4o-mini)</option>
             <option value="local">Hermes Local Gateway (localhost:8642)</option>
           </select>
+        </div>
+
+        <!-- Live AI Account & Provider Status Widget -->
+        <div class="ai-status-card" id="ai-status-card">
+          <div class="ai-status-header">
+            <div class="ai-status-title-wrap">
+              <span class="status-pulse-dot" id="ai-status-dot"></span>
+              <span class="ai-status-title">Status da Conta & Provedor em Tempo Real</span>
+            </div>
+            <button type="button" class="btn-check-ai-status" onclick="checkActiveAIStatus(true)" id="btn-refresh-ai-status" title="Checar status da conta e créditos agora">
+              <span class="refresh-icon">🔄</span> Diagnosticar Conta
+            </button>
+          </div>
+
+          <div class="ai-status-grid">
+            <div class="ai-status-item">
+              <span class="ai-status-label">Provedor & Modelo</span>
+              <span class="ai-status-val" id="ai-stat-provider">Google Gemini (gemini-3.6-flash)</span>
+            </div>
+            <div class="ai-status-item">
+              <span class="ai-status-label">Condição Operacional</span>
+              <span class="ai-status-val" id="ai-stat-status">
+                <span class="badge-status-pill loading">Verificando...</span>
+              </span>
+            </div>
+            <div class="ai-status-item">
+              <span class="ai-status-label">Tempo de Resposta (Latência)</span>
+              <span class="ai-status-val" id="ai-stat-latency">-- ms</span>
+            </div>
+            <div class="ai-status-item">
+              <span class="ai-status-label">Cota / Saldo / Créditos</span>
+              <span class="ai-status-val" id="ai-stat-credits">Consultando...</span>
+            </div>
+          </div>
+
+          <div class="ai-status-message-box" id="ai-status-msg-box" style="display: none;">
+            <span id="ai-status-msg-icon">ℹ️</span>
+            <div id="ai-status-msg-content">
+              <div id="ai-status-msg-text"></div>
+              <div id="ai-status-msg-recom" class="ai-status-recom"></div>
+            </div>
+          </div>
+
+          <div class="ai-status-footer">
+            <span id="ai-stat-updated">Última checagem: Aguardando verificação...</span>
+          </div>
         </div>
 
         <div class="settings-divider"></div>
@@ -460,8 +599,8 @@
             <div class="settings-form-group">
               <label>Modelo Gemini:</label>
               <select id="cfg-gemini-model" class="settings-select">
-                <option value="gemini-2.5-flash">gemini-2.5-flash (Ultra Rápido)</option>
-                <option value="gemini-2.5-pro">gemini-2.5-pro (Avançado)</option>
+                <option value="gemini-3.6-flash">gemini-3.6-flash (Ultra Rápido)</option>
+                <option value="gemini-3.6-pro">gemini-3.6-pro (Avançado)</option>
               </select>
             </div>
           </div>
@@ -484,18 +623,47 @@
           </div>
         </div>
 
-        <!-- Local Hermes Fields -->
+        <!-- Local Hermes / Ollama Fields -->
         <div id="cfg-field-local" class="provider-fields-group" style="display: none;">
           <div class="settings-form-grid">
             <div class="settings-form-group">
-              <label>Local Endpoint URL:</label>
-              <input type="text" id="cfg-local-url" class="settings-input" value="http://127.0.0.1:8642/v1">
+              <label>Local Endpoint URL (Ollama / LM Studio):</label>
+              <input type="text" id="cfg-local-url" class="settings-input" value="http://localhost:11434/v1">
             </div>
             <div class="settings-form-group">
-              <label>Chave de Acesso Local:</label>
-              <input type="text" id="cfg-local-key" class="settings-input" value="agentquest-local-key">
+              <label>Modelo Local Instalado:</label>
+              <select id="cfg-local-model" class="settings-select">
+                <option value="gemma4:31b-cloud" selected>gemma4:31b-cloud (Ativo & Ultra Rápido)</option>
+                <option value="qwen2.5:7b">qwen2.5:7b (Excelente em Português)</option>
+                <option value="qwen2.5:3b">qwen2.5:3b (Ultra Rápido & Leve)</option>
+                <option value="gemma4:26b">gemma4:26b</option>
+                <option value="llama3.1:8b">llama3.1:8b (Meta Llama 3.1)</option>
+                <option value="nousresearch/hermes-3-llama-3.1-8b">hermes-3:8b (Especialista em Agentes)</option>
+                <option value="deepseek-r1:7b">deepseek-r1:7b (Raciocínio Profundo)</option>
+              </select>
+            </div>
+            <div class="settings-form-group" style="grid-column: 1 / -1;">
+              <label>Chave de Acesso Local (Opcional):</label>
+              <input type="text" id="cfg-local-key" class="settings-input" value="ollama">
             </div>
           </div>
+        </div>
+
+        <!-- Fallback / Contingency System Card -->
+        <div class="settings-fallback-card">
+          <div class="settings-fallback-header">
+            <div class="settings-fallback-title">
+              <span>🛡️</span>
+              <strong>Contingência Automática: Fallback para IA Local (Ollama)</strong>
+            </div>
+            <label class="switch-toggle" title="Ativar ou desativar troca automática">
+              <input type="checkbox" id="cfg-auto-fallback-local" checked>
+              <span class="slider-toggle"></span>
+            </label>
+          </div>
+          <p class="settings-help-text" style="margin: 6px 0 10px 0; font-size: 11px;">
+            Quando o <strong>Google Gemini</strong> atingir o limite gratuito (Erro 429 / Cota Esgotada), o sistema chaveia automaticamente para a IA Local sem travar o atendimento e sem deixar seus clientes no vácuo.
+          </p>
         </div>
 
         <div class="settings-test-row">
@@ -523,6 +691,37 @@
         <div class="settings-section-title">
           <span>💬</span> WhatsApp (API de Mensageria)
         </div>
+
+        <!-- Live WhatsApp/Evolution API Connection Status -->
+        <div class="ai-status-card" id="wa-status-card">
+          <div class="ai-status-header">
+            <div class="ai-status-title-wrap">
+              <span class="status-pulse-dot" id="wa-status-dot"></span>
+              <span class="ai-status-title" id="wa-status-label">Verificando conexão...</span>
+            </div>
+            <button type="button" class="btn-check-ai-status" id="btn-wa-connect" onclick="connectWhatsApp()" title="Conectar/parear o WhatsApp">
+              <span class="refresh-icon">📡</span> Conectar WhatsApp
+            </button>
+          </div>
+
+          <div class="ai-status-message-box" id="wa-docker-warning" style="display: none;">
+            <span>🔴</span>
+            <div>
+              <div>Docker Desktop não encontrado ou não está rodando. O WhatsApp requer o Docker Desktop para funcionar.</div>
+              <div class="ai-status-recom">
+                💡 <a href="https://www.docker.com/products/docker-desktop/" target="_blank" rel="noopener">Baixe o Docker Desktop</a>, instale, reinicie o computador se solicitado, depois volte aqui e clique em "Conectar WhatsApp" novamente.
+              </div>
+            </div>
+          </div>
+
+          <div id="wa-qr-box" style="display: none; text-align: center; padding: 16px;">
+            <p style="margin-bottom: 10px; font-size: 12.5px; color: #cbd5e1;">Escaneie este QR Code no seu WhatsApp (Aparelhos conectados → Conectar um aparelho):</p>
+            <img id="wa-qr-image" src="" alt="QR Code do WhatsApp" style="width: 220px; height: 220px; border-radius: 8px; background: #fff; padding: 8px;">
+          </div>
+        </div>
+
+        <div class="settings-divider"></div>
+
         <div class="settings-form-grid">
           <div class="settings-form-group">
             <label>Tipo de Conexão WhatsApp:</label>
@@ -748,7 +947,43 @@
   </div>
 </div>
 
+<!-- ONBOARDING DE PRIMEIRA EXECUÇÃO -->
+<div id="onboarding-modal-overlay" class="modal-overlay">
+  <div class="modal-card edit-draft-modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title-row">
+        <div class="report-brand-badge" style="background: rgba(168, 85, 247, 0.2); border-color: rgba(168, 85, 247, 0.4);">
+          <span>🤖</span> BEM-VINDO
+        </div>
+        <h2>Configure sua Chave de IA</h2>
+        <p>O AgentQuest HQ precisa de uma chave da API do Google Gemini para os agentes funcionarem. É gratuita e leva menos de 1 minuto para gerar.</p>
+      </div>
+    </div>
+
+    <div class="edit-modal-body">
+      <div class="settings-form-group">
+        <label>Chave da API Gemini:</label>
+        <input type="password" id="onboarding-gemini-key" class="settings-input" placeholder="AI...">
+        <p class="settings-help-text">
+          Não tem uma chave ainda? <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Gere gratuitamente em aistudio.google.com/app/apikey</a> e cole aqui.
+        </p>
+      </div>
+
+      <div class="ai-status-message-box" id="onboarding-msg-box" style="display: none;"></div>
+    </div>
+
+    <div class="edit-modal-actions">
+      <button class="btn-edit-cancel" onclick="dismissOnboarding()">
+        <span>⏭️</span> Configurar Depois
+      </button>
+      <button class="btn-edit-save-approve" id="btn-onboarding-submit" onclick="submitOnboarding()">
+        <span>🚀</span> Salvar e Começar
+      </button>
+    </div>
+  </div>
+</div>
+
 <div id="toasts"></div>
-<script src="app.js"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

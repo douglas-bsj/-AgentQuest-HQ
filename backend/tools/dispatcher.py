@@ -18,10 +18,11 @@ import datetime
 import httpx
 from dotenv import load_dotenv
 
-load_dotenv()
+from backend.utils.paths import base_path
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-OUTPUTS_DIR = os.path.join(BASE_DIR, "outputs")
+load_dotenv(base_path(".env"))
+
+OUTPUTS_DIR = base_path("outputs")
 
 
 class ActionDispatcher:

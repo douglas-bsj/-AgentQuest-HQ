@@ -13,6 +13,8 @@ import re
 from openai import OpenAI
 from backend.database import SessionLocal, MemoryFact, KnowledgeGap
 from backend.tools.obsidian_bridge import obsidian_bridge
+from backend.tools.settings_manager import settings_manager
+from backend.utils.paths import base_path
 
 class MemoryMinerAgent:
     def __init__(self):
@@ -21,16 +23,18 @@ class MemoryMinerAgent:
         self._init_client()
 
     def _init_client(self):
+        cfg = settings_manager.get_settings().get("ai_providers", {})
+
         # 1. Tenta OpenRouter
-        api_key = os.getenv("NOUS_API_KEY")
-        base_url = os.getenv("NOUS_BASE_URL", "https://openrouter.ai/api/v1")
-        model = os.getenv("NOUS_MODEL_NAME", "nousresearch/hermes-3-llama-3.1-405b")
+        api_key = cfg.get("nous_api_key") or os.getenv("NOUS_API_KEY")
+        base_url = cfg.get("nous_base_url") or os.getenv("NOUS_BASE_URL", "https://openrouter.ai/api/v1")
+        model = cfg.get("nous_model_name") or os.getenv("NOUS_MODEL_NAME", "nousresearch/hermes-3-llama-3.1-405b")
 
         if not api_key:
             # 2. Tenta Gemini
-            api_key = os.getenv("GEMINI_API_KEY")
+            api_key = cfg.get("gemini_api_key") or os.getenv("GEMINI_API_KEY")
             base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
-            model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+            model = cfg.get("gemini_model") or os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
         if api_key:
             try:
@@ -187,7 +191,7 @@ Responda ESTRITAMENTE em formato JSON com esta estrutura:
     def _sync_obsidian_facts(self, facts: list, source_person: str):
         """Registra os fatos minerados na base de conhecimento do Obsidian."""
         try:
-            vault_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "vault", "01_Base_Conhecimento")
+            vault_dir = base_path("vault", "01_Base_Conhecimento")
             os.makedirs(vault_dir, exist_ok=True)
             fact_file = os.path.join(vault_dir, "Memoria_Fatos_Conversas.md")
 

@@ -12,6 +12,8 @@ import json
 import datetime
 from openai import OpenAI
 from backend.database import SessionLocal, MemoryFact, KnowledgeGap, OracleChatMessage
+from backend.tools.settings_manager import settings_manager
+from backend.utils.paths import base_path
 
 class OracleAgent:
     def __init__(self):
@@ -20,14 +22,16 @@ class OracleAgent:
         self._init_client()
 
     def _init_client(self):
-        api_key = os.getenv("NOUS_API_KEY")
-        base_url = os.getenv("NOUS_BASE_URL", "https://openrouter.ai/api/v1")
-        model = os.getenv("NOUS_MODEL_NAME", "nousresearch/hermes-3-llama-3.1-405b")
+        cfg = settings_manager.get_settings().get("ai_providers", {})
+
+        api_key = cfg.get("nous_api_key") or os.getenv("NOUS_API_KEY")
+        base_url = cfg.get("nous_base_url") or os.getenv("NOUS_BASE_URL", "https://openrouter.ai/api/v1")
+        model = cfg.get("nous_model_name") or os.getenv("NOUS_MODEL_NAME", "nousresearch/hermes-3-llama-3.1-405b")
 
         if not api_key:
-            api_key = os.getenv("GEMINI_API_KEY")
+            api_key = cfg.get("gemini_api_key") or os.getenv("GEMINI_API_KEY")
             base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
-            model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+            model = cfg.get("gemini_model") or os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
         if api_key:
             try:
@@ -178,7 +182,7 @@ PERGUNTA DO USUÁRIO:
     def _save_term_to_obsidian(self, term: str, definition: str):
         """Grava a definição no cofre Obsidian."""
         try:
-            vault_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "vault", "01_Base_Conhecimento")
+            vault_dir = base_path("vault", "01_Base_Conhecimento")
             os.makedirs(vault_dir, exist_ok=True)
             dict_file = os.path.join(vault_dir, "Dicionario_Termos_Aprendidos.md")
 
